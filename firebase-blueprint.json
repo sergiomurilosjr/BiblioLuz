@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "Book": {
+      "title": "Book",
+      "description": "Information about a book in the library stock.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "description": "Title of the book" },
+        "author": { "type": "string", "description": "Author of the book" },
+        "isbn": { "type": "string", "description": "ISBN identifier" },
+        "category": { "type": "string", "description": "Genre or category" },
+        "cdeIndex": { "type": "string", "description": "Índice CDE (Classificação Decimal Espírita)" },
+        "edition": { "type": "string", "description": "Edição do livro" },
+        "year": { "type": "string", "description": "Ano de publicação" },
+        "acquisitionType": { "type": "string", "description": "Forma de Aquisição" },
+        "supplier": { "type": "string", "description": "Fornecedor" },
+        "status": { "type": "string", "enum": ["available", "loaned"], "description": "Current status" },
+        "coverUrl": { "type": "string", "format": "uri", "description": "URL to book cover image" },
+        "description": { "type": "string", "description": "Short summary" },
+        "ownerId": { "type": "string", "description": "UID of the user who owns the book inventory" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "author", "status", "ownerId"]
+    },
+    "Loan": {
+      "title": "Loan",
+      "description": "A record of a book being borrowed.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "bookId": { "type": "string", "description": "ID of the borrowed book" },
+        "bookTitle": { "type": "string" },
+        "cdeIndex": { "type": "string", "description": "Índice CDE" },
+        "borrowerName": { "type": "string", "description": "Name of the person borrowing the book" },
+        "borrowerEmail": { "type": "string", "format": "email" },
+        "borrowerPhone": { "type": "string", "description": "Phone number" },
+        "responsible": { "type": "string", "description": "Person responsible for the loan" },
+        "notes": { "type": "string", "description": "Observations" },
+        "loanDate": { "type": "string", "format": "date-time" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "returnDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "returned", "overdue", "lost"] },
+        "ownerId": { "type": "string", "description": "UID of the library owner" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["bookId", "borrowerName", "loanDate", "borrowerPhone", "status", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/books/{bookId}": {
+      "schema": "Book",
+      "description": "Collection of books in the library."
+    },
+    "/loans/{loanId}": {
+      "schema": "Loan",
+      "description": "Collection of loan records."
+    }
+  }
+}
