@@ -1342,7 +1342,10 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
               <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/20">
                 <BookIcon size={18} strokeWidth={2.5} />
               </div>
-              <span className="text-xl font-display font-bold tracking-tight text-slate-800 dark:text-slate-100">BiblioLuz</span>
+              <div className="flex flex-col">
+                <span className="text-xl font-display font-bold tracking-tight text-slate-800 dark:text-slate-100 leading-none">BiblioLuz</span>
+                <span className="text-[8px] font-bold text-indigo-500/60 dark:text-indigo-400/50 uppercase tracking-widest mt-0.5">v2.2.0</span>
+              </div>
             </div>
             <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
           </div>
@@ -1398,7 +1401,10 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-100">
               <BookIcon size={16} strokeWidth={2.5} />
             </div>
-            <span className="font-display font-bold tracking-tight text-slate-800 dark:text-slate-100">BiblioLuz</span>
+            <div className="flex flex-col">
+              <span className="font-display font-bold tracking-tight text-slate-800 dark:text-slate-100 leading-none">BiblioLuz</span>
+              <span className="text-[7px] font-bold text-indigo-500/60 dark:text-indigo-400/50 uppercase tracking-widest">v2.2.0</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
              <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
