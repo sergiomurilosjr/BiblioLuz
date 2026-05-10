@@ -1018,44 +1018,7 @@ const LoansView = () => {
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-3xl font-display font-bold tracking-tight mb-2 text-slate-800">Histórico de Empréstimos</h1>
-          <p className="text-slate-400 text-sm font-medium">Veja quem está com seus livros e gerencie devoluções.</p>
-        </div>
-        <button 
-          onClick={() => setIsImportModalOpen(true)}
-          className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 px-5 py-3.5 rounded-xl font-bold text-sm transition-all hover:bg-slate-50 hover:border-slate-300"
-        >
-          <Database size={18} className="text-indigo-600" />
-          <span>Importar Planilha</span>
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard label="Ativos" value={loans.filter(l => l.status === 'active').length} icon={HandHeart} colorClass="bg-amber-500" />
-        <StatCard label="Devolvidos" value={loans.filter(l => l.status === 'returned').length} icon={CheckCircle2} colorClass="bg-emerald-500" />
-        <StatCard label="Atrasados" value={overdueCount} icon={Clock} colorClass="bg-rose-500" highlight={overdueCount > 0} />
-        <StatCard label="Total Movimentações" value={loans.length} icon={History} colorClass="bg-slate-600" />
-      </div>
-
-      {overdueCount > 0 && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-rose-50 border border-rose-100 p-4 rounded-xl flex items-center gap-4 text-rose-800 shadow-sm"
-        >
-          <div className="p-2 bg-rose-500 rounded-lg text-white">
-            <Clock size={20} />
-          </div>
-          <div>
-            <p className="text-sm font-bold">Atenção: {overdueCount} {overdueCount === 1 ? 'empréstimo está' : 'empréstimos estão'} com a devolução atrasada!</p>
-            <p className="text-xs font-medium opacity-80">Verifique a lista abaixo para gerenciar as pendências.</p>
-          </div>
-        </motion.div>
-      )}
-
-      <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row items-center gap-4">
         <div className="relative flex-1 group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" size={16} />
           <input 
@@ -1075,6 +1038,36 @@ const LoansView = () => {
             {showHistory ? 'Ocultar Histórico' : 'Ver Histórico'}
           </button>
         </div>
+      </div>
+
+      {overdueCount > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-rose-50 border border-rose-100 p-4 rounded-xl flex items-center gap-4 text-rose-800 shadow-sm"
+        >
+          <div className="p-2 bg-rose-500 rounded-lg text-white">
+            <Clock size={20} />
+          </div>
+          <div>
+            <p className="text-sm font-bold">Atenção: {overdueCount} {overdueCount === 1 ? 'empréstimo está' : 'empréstimos estão'} com a devolução atrasada!</p>
+            <p className="text-xs font-medium opacity-80">Verifique a lista abaixo para gerenciar as pendências.</p>
+          </div>
+        </motion.div>
+      )}
+
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-display font-bold tracking-tight mb-2 text-slate-800">Histórico de Empréstimos</h1>
+          <p className="text-slate-400 text-sm font-medium">Veja quem está com seus livros e gerencie devoluções.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard label="Ativos" value={loans.filter(l => l.status === 'active').length} icon={HandHeart} colorClass="bg-amber-500" />
+        <StatCard label="Devolvidos" value={loans.filter(l => l.status === 'returned').length} icon={CheckCircle2} colorClass="bg-emerald-500" />
+        <StatCard label="Atrasados" value={overdueCount} icon={Clock} colorClass="bg-rose-500" highlight={overdueCount > 0} />
+        <StatCard label="Total Movimentações" value={loans.length} icon={History} colorClass="bg-slate-600" />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
