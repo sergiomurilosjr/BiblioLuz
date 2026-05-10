@@ -16,7 +16,8 @@ import {
   Database,
   Trash2,
   Edit,
-  History
+  History,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -1118,7 +1119,19 @@ const LoansView = () => {
                     <td className="px-8 py-6">
                       <div className="flex flex-col">
                         <p className="font-bold text-slate-800 text-sm">{loan.borrowerName}</p>
-                        {loan.borrowerPhone && <p className="text-[10px] text-indigo-500 font-bold mt-0.5">{loan.borrowerPhone}</p>}
+                        {loan.borrowerPhone && (
+                          <button 
+                            onClick={() => {
+                              navigator.clipboard.writeText(loan.borrowerPhone);
+                              alert('Número copiado!');
+                            }}
+                            className="text-[10px] text-indigo-500 font-bold mt-0.5 hover:text-indigo-700 transition-colors flex items-center gap-1 group/phone"
+                            title="Clique para copiar"
+                          >
+                            <span>{loan.borrowerPhone}</span>
+                            <Copy size={10} className="text-indigo-400 opacity-60 group-hover/phone:opacity-100" />
+                          </button>
+                        )}
                         {loan.responsible && <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight italic">Resp: {loan.responsible}</p>}
                       </div>
                     </td>
