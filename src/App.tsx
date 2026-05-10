@@ -845,12 +845,6 @@ const LibraryView = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <StatCard label="Total de Livros" value={stats.total} icon={Library} colorClass="bg-indigo-600" highlight />
-        <StatCard label="Disponíveis agora" value={stats.available} icon={CheckCircle2} colorClass="bg-emerald-500" />
-        <StatCard label="Em circulação" value={stats.loaned} icon={HandHeart} colorClass="bg-amber-500" />
-      </div>
-
       <div className="flex flex-col sm:flex-row items-center gap-4">
         <div className="relative flex-1 group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" size={16} />
@@ -868,6 +862,12 @@ const LibraryView = () => {
             Filtros
           </button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <StatCard label="Total de Livros" value={stats.total} icon={Library} colorClass="bg-indigo-600" highlight />
+        <StatCard label="Disponíveis agora" value={stats.available} icon={CheckCircle2} colorClass="bg-emerald-500" />
+        <StatCard label="Em circulação" value={stats.loaned} icon={HandHeart} colorClass="bg-amber-500" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
