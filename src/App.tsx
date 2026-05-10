@@ -1455,8 +1455,12 @@ export default function App() {
 function AppContent() {
   const { user, loading } = useAuth();
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
+    try {
+      if (typeof window !== 'undefined') {
+        return (localStorage.getItem('biblio-theme') as 'light' | 'dark') || 'light';
+      }
+    } catch (e) {
+      console.error('LocalStorage not available');
     }
     return 'light';
   });
@@ -1465,31 +1469,39 @@ function AppContent() {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
-    localStorage.setItem('theme', theme);
+    try {
+      localStorage.setItem('biblio-theme', theme);
+    } catch (e) {}
   }, [theme]);
 
-  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-      <div className="relative">
-        <Loader2 className="animate-spin text-slate-200 dark:text-slate-800" size={64} strokeWidth={1} />
-        <BookIcon className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 dark:text-indigo-500" size={24} />
+    <div className={theme}>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+        <div className="relative">
+          <Loader2 className="animate-spin text-slate-200 dark:text-slate-800" size={64} strokeWidth={1} />
+          <BookIcon className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 dark:text-indigo-500" size={24} />
+        </div>
       </div>
     </div>
   );
 
   return (
-    <AnimatePresence mode="wait">
-      {user ? (
-        <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <Dashboard theme={theme} toggleTheme={toggleTheme} />
-        </motion.div>
-      ) : (
-        <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <Login theme={theme} toggleTheme={toggleTheme} />
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div className={`${theme} min-h-screen`}>
+      <AnimatePresence mode="wait">
+        {user ? (
+          <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <Dashboard theme={theme} toggleTheme={toggleTheme} />
+          </motion.div>
+        ) : (
+          <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <Login theme={theme} toggleTheme={toggleTheme} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
