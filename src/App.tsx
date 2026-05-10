@@ -17,7 +17,9 @@ import {
   Trash2,
   Edit,
   History,
-  Copy
+  Copy,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -26,6 +28,18 @@ import { libraryService, Book, Loan } from './services/libraryService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+// --- Theme ---
+
+const ThemeToggle = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: () => void }) => (
+  <button 
+    onClick={toggleTheme}
+    className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all border border-slate-200 dark:border-slate-700"
+    title={theme === 'light' ? 'Ativar Modo Escuro' : 'Ativar Modo Claro'}
+  >
+    {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+  </button>
+);
+
 // --- Components ---
 
 const SidebarItem = ({ icon: Icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) => (
@@ -33,8 +47,8 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: { icon: any, label:
     onClick={onClick}
     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium ${
       active 
-        ? 'bg-indigo-50 text-indigo-700 font-bold' 
-        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+        ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 font-bold' 
+        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
     }`}
   >
     <div className="flex items-center gap-3">
@@ -48,16 +62,16 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: { icon: any, label:
 );
 
 const StatCard = ({ label, value, icon: Icon, colorClass, highlight }: { label: string, value: number, icon: any, colorClass: string, highlight?: boolean }) => (
-  <div className={`glass-card p-6 rounded-xl overflow-hidden relative ${highlight ? 'border-indigo-100 bg-indigo-50/20' : ''}`}>
+  <div className={`glass-card p-6 rounded-xl overflow-hidden relative ${highlight ? 'border-indigo-100 dark:border-indigo-900/30 bg-indigo-50/20 dark:bg-indigo-900/10' : ''}`}>
     <div className="flex justify-between items-start mb-6">
       <div className={`p-2.5 rounded-lg ${colorClass} text-white shadow-lg shadow-black/5`}>
         <Icon size={20} />
       </div>
-      <span className="text-3xl font-display font-bold tracking-tight text-slate-800">{value}</span>
+      <span className="text-3xl font-display font-bold tracking-tight text-slate-800 dark:text-slate-100">{value}</span>
     </div>
     <div className="flex flex-col">
-      <p className="text-[10px] font-bold text-slate-400 border-b border-slate-100 pb-2 mb-2 uppercase tracking-[0.15em]">{label}</p>
-      <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+      <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800 pb-2 mb-2 uppercase tracking-[0.15em]">{label}</p>
+      <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
         <motion.div 
           initial={{ width: 0 }}
           animate={{ width: highlight ? '100%' : '65%' }}
@@ -81,7 +95,7 @@ const BookCard = memo(({ book, onLoan, onEdit, onDelete }: BookCardProps) => (
     animate={{ opacity: 1, y: 0 }}
     className="glass-card flex flex-col h-full rounded-xl group relative hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-500 overflow-hidden"
   >
-    <div className="aspect-[3/4.2] bg-slate-100 relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-500">
+    <div className="aspect-[3/4.2] bg-slate-100 dark:bg-slate-800 relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-500">
       {book.coverUrl ? (
         <img 
           src={book.coverUrl} 
@@ -128,19 +142,19 @@ const BookCard = memo(({ book, onLoan, onEdit, onDelete }: BookCardProps) => (
     </div>
     
     <div className="p-4 flex flex-col flex-1">
-      <h3 className="font-bold text-slate-800 text-sm line-clamp-1 mb-0.5" title={book.title}>{book.title}</h3>
-      <p className="text-[11px] text-slate-400 font-semibold mb-4">{book.author}</p>
+      <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm line-clamp-1 mb-0.5" title={book.title}>{book.title}</h3>
+      <p className="text-[11px] text-slate-400 dark:text-slate-500 font-semibold mb-4">{book.author}</p>
       
-      <div className="mt-auto pt-3 border-t border-slate-50">
+      <div className="mt-auto pt-3 border-t border-slate-50 dark:border-slate-800">
         {book.status === 'available' ? (
           <button 
             onClick={onLoan}
-            className="w-full text-indigo-600 font-bold text-[10px] uppercase tracking-[0.2em] hover:text-indigo-700 transition-colors py-1"
+            className="w-full text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-[0.2em] hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors py-1"
           >
             Realizar Empréstimo
           </button>
         ) : (
-          <div className="text-slate-300 font-bold text-[10px] uppercase tracking-[0.2em] text-center py-1">
+          <div className="text-slate-300 dark:text-slate-600 font-bold text-[10px] uppercase tracking-[0.2em] text-center py-1">
             Indisponível
           </div>
         )}
@@ -162,11 +176,11 @@ const ModalWrapper = ({ children, onClose, title }: { children: React.ReactNode,
       initial={{ scale: 0.95, opacity: 0, y: 30 }}
       animate={{ scale: 1, opacity: 1, y: 0 }}
       exit={{ scale: 0.95, opacity: 0, y: 30 }}
-      className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+      className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border border-slate-200 dark:border-slate-800"
     >
-      <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between shrink-0">
-        <h2 className="text-lg font-display font-bold text-slate-800">{title}</h2>
-        <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-900 transition-colors">
+      <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+        <h2 className="text-lg font-display font-bold text-slate-800 dark:text-slate-100">{title}</h2>
+        <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors">
           <X size={20} />
         </button>
       </div>
@@ -213,21 +227,21 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest pl-1">Título</label>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Título</label>
             <input 
               required 
               type="text" 
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-neutral-900/5 font-medium text-sm" 
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 transition-colors" 
               value={formData.title}
               onChange={e => setFormData({ ...formData, title: e.target.value })}
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest pl-1">Autor</label>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Autor</label>
             <input 
               required 
               type="text" 
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-neutral-900/5 font-medium text-sm" 
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 transition-colors" 
               value={formData.author}
               onChange={e => setFormData({ ...formData, author: e.target.value })}
             />
@@ -236,28 +250,28 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
 
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest pl-1">Índice CDE</label>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Índice CDE</label>
             <input 
               type="text" 
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-neutral-900/5 font-medium text-sm" 
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors" 
               value={formData.cdeIndex}
               onChange={e => setFormData({ ...formData, cdeIndex: e.target.value })}
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest pl-1">Categoria</label>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Categoria</label>
             <input 
               type="text" 
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-neutral-900/5 font-medium text-sm" 
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors" 
               value={formData.category}
               onChange={e => setFormData({ ...formData, category: e.target.value })}
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest pl-1">ISBN</label>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">ISBN</label>
             <input 
               type="text" 
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-neutral-900/5 font-medium text-sm" 
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors" 
               value={formData.isbn}
               onChange={e => setFormData({ ...formData, isbn: e.target.value })}
             />
@@ -266,19 +280,19 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest pl-1">Edição</label>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Edição</label>
             <input 
               type="text" 
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-neutral-900/5 font-medium text-sm" 
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors" 
               value={formData.edition}
               onChange={e => setFormData({ ...formData, edition: e.target.value })}
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest pl-1">Ano</label>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Ano</label>
             <input 
               type="text" 
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-neutral-900/5 font-medium text-sm" 
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors" 
               value={formData.year}
               onChange={e => setFormData({ ...formData, year: e.target.value })}
             />
@@ -287,19 +301,19 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest pl-1">Forma de Aquisição</label>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Forma de Aquisição</label>
             <input 
               type="text" 
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-neutral-900/5 font-medium text-sm" 
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors" 
               value={formData.acquisitionType}
               onChange={e => setFormData({ ...formData, acquisitionType: e.target.value })}
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest pl-1">Fornecedor</label>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Fornecedor</label>
             <input 
               type="text" 
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-neutral-900/5 font-medium text-sm" 
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors" 
               value={formData.supplier}
               onChange={e => setFormData({ ...formData, supplier: e.target.value })}
             />
@@ -307,20 +321,20 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
         </div>
 
         <div className="space-y-1">
-          <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest pl-1">URL da Capa</label>
+          <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">URL da Capa</label>
           <input 
             type="url" 
             placeholder="https://..."
-            className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-neutral-900/5 font-medium text-sm" 
+            className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors" 
             value={formData.coverUrl}
             onChange={e => setFormData({ ...formData, coverUrl: e.target.value })}
           />
         </div>
         <div className="space-y-1">
-          <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest pl-1">Descrição</label>
+          <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Descrição</label>
           <textarea 
             rows={2}
-            className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-neutral-900/5 font-medium text-sm resize-none" 
+            className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm resize-none text-slate-800 dark:text-slate-100 transition-colors" 
             value={formData.description}
             onChange={e => setFormData({ ...formData, description: e.target.value })}
           />
@@ -328,7 +342,7 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
         <button 
           disabled={loading}
           type="submit" 
-          className="w-full bg-neutral-900 text-white font-bold py-4 rounded-xl hover:bg-neutral-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-neutral-100 disabled:opacity-50"
+          className="w-full bg-slate-900 dark:bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-slate-800 dark:hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-100 dark:shadow-indigo-950/20 disabled:opacity-50"
         >
           {loading ? <Loader2 className="animate-spin" size={20} /> : (book?.id ? 'Salvar Alterações' : 'Adicionar ao Acervo')}
         </button>
@@ -739,7 +753,7 @@ const ImportLoansModal = ({ onClose, onSave }: { onClose: () => void, onSave: ()
   return (
     <ModalWrapper title="Importar Empréstimos" onClose={onClose}>
       <div className="space-y-6">
-        <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-xs text-indigo-800 leading-relaxed">
+        <div className="bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30 p-4 rounded-xl text-xs text-indigo-800 dark:text-indigo-300 leading-relaxed">
           <p className="font-bold mb-1">Como importar empréstimos:</p>
           <ol className="list-decimal pl-4 space-y-1">
             <li>Selecione as colunas: <b>Título, CDE, Nome, Telefone, E-mail, Data Emp., Data Dev., Status, Responsável, Obs.</b></li>
@@ -751,7 +765,7 @@ const ImportLoansModal = ({ onClose, onSave }: { onClose: () => void, onSave: ()
         <textarea 
           rows={10}
           placeholder="Cole aqui os dados da sua planilha de empréstimos..."
-          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-mono text-[10px] resize-none" 
+          className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-mono text-[10px] resize-none text-slate-800 dark:text-slate-100 transition-colors" 
           value={pastedData}
           onChange={e => setPastedData(e.target.value)}
         />
@@ -826,15 +840,15 @@ const LibraryView = () => {
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-display font-bold tracking-tight mb-2 text-slate-800">Acervo Geral</h1>
-          <p className="text-slate-400 text-sm font-medium">Controle total sobre seu estoque de títulos.</p>
+          <h1 className="text-3xl font-display font-bold tracking-tight mb-2 text-slate-800 dark:text-slate-100">Acervo Geral</h1>
+          <p className="text-slate-400 dark:text-slate-500 text-sm font-medium">Controle total sobre seu estoque de títulos.</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <button 
             onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 px-5 py-3.5 rounded-xl font-bold text-sm transition-all hover:bg-slate-50 hover:border-slate-300"
+            className="flex items-center justify-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 px-5 py-3.5 rounded-xl font-bold text-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
           >
-            <Database size={18} className="text-indigo-600" />
+            <Database size={18} className="text-indigo-600 dark:text-indigo-400" />
             <span>Importar Planilha</span>
           </button>
           <button 
@@ -853,7 +867,7 @@ const LibraryView = () => {
           <input 
             type="text" 
             placeholder="Buscar por título, autor ou ISBN..." 
-            className="w-full bg-white border border-slate-200 rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all text-sm text-slate-600 placeholder:text-slate-300"
+            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all text-sm text-slate-600 dark:text-slate-300 placeholder:text-slate-300 dark:placeholder:text-slate-600"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -1029,7 +1043,7 @@ const LoansView = () => {
           <input 
             type="text" 
             placeholder="Buscar por livro ou destinatário..." 
-            className="w-full bg-white border border-slate-200 rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all text-sm text-slate-600 placeholder:text-slate-300"
+            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all text-sm text-slate-600 dark:text-slate-300 placeholder:text-slate-300 dark:placeholder:text-slate-600"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -1037,9 +1051,9 @@ const LoansView = () => {
         <div className="flex gap-2">
           <button 
             onClick={() => setShowHistory(!showHistory)}
-            className={`btn-secondary text-xs px-4 py-3 border ${showHistory ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : ''}`}
+            className={`btn-secondary text-xs px-4 py-3 border ${showHistory ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-400' : ''}`}
           >
-            <History size={14} className={showHistory ? 'text-indigo-600' : ''} />
+            <History size={14} className={showHistory ? 'text-indigo-600 dark:text-indigo-400' : ''} />
             {showHistory ? 'Ocultar Histórico' : 'Ver Histórico'}
           </button>
         </div>
@@ -1049,7 +1063,7 @@ const LoansView = () => {
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-rose-50 border border-rose-100 p-4 rounded-xl flex items-center gap-4 text-rose-800 shadow-sm"
+          className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 p-4 rounded-xl flex items-center gap-4 text-rose-800 dark:text-rose-200 shadow-sm"
         >
           <div className="p-2 bg-rose-500 rounded-lg text-white">
             <Clock size={20} />
@@ -1063,8 +1077,8 @@ const LoansView = () => {
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-display font-bold tracking-tight mb-2 text-slate-800">Histórico de Empréstimos</h1>
-          <p className="text-slate-400 text-sm font-medium">Veja quem está com seus livros e gerencie devoluções.</p>
+          <h1 className="text-3xl font-display font-bold tracking-tight mb-2 text-slate-800 dark:text-slate-100">Histórico de Empréstimos</h1>
+          <p className="text-slate-400 dark:text-slate-500 text-sm font-medium">Veja quem está com seus livros e gerencie devoluções.</p>
         </div>
       </div>
 
@@ -1075,19 +1089,19 @@ const LoansView = () => {
         <StatCard label="Total Movimentações" value={loans.length} icon={History} colorClass="bg-slate-600" />
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm transition-colors duration-300">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left font-sans">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Livro</th>
-                <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Pessoa</th>
-                <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Prazo Dev.</th>
-                <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Status</th>
-                <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Ações</th>
+              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Livro</th>
+                <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Pessoa</th>
+                <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Prazo Dev.</th>
+                <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Status</th>
+                <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
               {sortedAndFilteredLoans.map(loan => {
                 let isOverdue = false;
                 try {
@@ -1102,27 +1116,27 @@ const LoansView = () => {
                 }
 
                 return (
-                  <tr key={loan.id} className={`hover:bg-slate-50/50 transition-colors group ${isOverdue ? 'bg-rose-50/10' : ''}`}>
+                  <tr key={loan.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group ${isOverdue ? 'bg-rose-50/10 dark:bg-rose-950/10' : ''}`}>
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <div className={`w-10 h-14 rounded-md flex items-center justify-center text-slate-300 shadow-sm overflow-hidden flex-shrink-0 border ${isOverdue ? 'bg-rose-50 border-rose-100' : 'bg-slate-50 border-slate-100'}`}>
+                        <div className={`w-10 h-14 rounded-md flex items-center justify-center text-slate-300 dark:text-slate-700 shadow-sm overflow-hidden flex-shrink-0 border ${isOverdue ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-900/30' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800'}`}>
                           {loan.cdeIndex ? (
-                            <div className={`w-full h-full flex items-center justify-center text-[10px] font-bold ${isOverdue ? 'bg-rose-100 text-rose-500' : 'bg-indigo-50 text-indigo-400'}`}>
+                            <div className={`w-full h-full flex items-center justify-center text-[10px] font-bold ${isOverdue ? 'bg-rose-100 dark:bg-rose-900/50 text-rose-500 dark:text-rose-400' : 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-400 dark:text-indigo-300'}`}>
                               {loan.cdeIndex}
                             </div>
                           ) : (
-                            <BookIcon size={18} strokeWidth={1.5} className={isOverdue ? 'text-rose-300' : ''} />
+                            <BookIcon size={18} strokeWidth={1.5} className={isOverdue ? 'text-rose-300 dark:text-rose-700' : ''} />
                           )}
                         </div>
                         <div>
-                          <p className={`font-bold text-sm line-clamp-1 ${isOverdue ? 'text-rose-900' : 'text-slate-800'}`}>{loan.bookTitle}</p>
-                          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-0.5 whitespace-nowrap">ID: {loan.bookId.slice(-6)}</p>
+                          <p className={`font-bold text-sm line-clamp-1 ${isOverdue ? 'text-rose-900 dark:text-rose-100' : 'text-slate-800 dark:text-slate-100'}`}>{loan.bookTitle}</p>
+                          <p className="text-[10px] font-bold text-slate-300 dark:text-slate-600 uppercase tracking-widest mt-0.5 whitespace-nowrap">ID: {loan.bookId.slice(-6)}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex flex-col">
-                        <p className="font-bold text-slate-800 text-sm">{loan.borrowerName}</p>
+                        <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{loan.borrowerName}</p>
                         {loan.borrowerPhone && (
                           <button 
                             onClick={() => {
@@ -1130,19 +1144,19 @@ const LoansView = () => {
                               setCopiedId(loan.id!);
                               setTimeout(() => setCopiedId(null), 2000);
                             }}
-                            className="text-[10px] text-indigo-500 font-bold mt-0.5 hover:text-indigo-700 transition-colors flex items-center gap-1 group/phone"
+                            className="text-[10px] text-indigo-500 dark:text-indigo-400 font-bold mt-0.5 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors flex items-center gap-1 group/phone"
                             title="Clique para copiar"
                           >
                             <span>{copiedId === loan.id ? 'Copiado!' : loan.borrowerPhone}</span>
-                            <Copy size={10} className="text-indigo-400 opacity-60 group-hover/phone:opacity-100" />
+                            <Copy size={10} className="text-indigo-400 dark:text-indigo-500 opacity-60 group-hover/phone:opacity-100" />
                           </button>
                         )}
-                        {loan.responsible && <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight italic">Resp: {loan.responsible}</p>}
+                        {loan.responsible && <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tight italic">Resp: {loan.responsible}</p>}
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <div className={`flex items-center gap-2 ${isOverdue ? 'text-rose-600' : 'text-slate-500'}`}>
-                        <Clock size={14} className={isOverdue ? 'text-rose-400 animate-pulse' : 'text-slate-300'} />
+                      <div className={`flex items-center gap-2 ${isOverdue ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                        <Clock size={14} className={isOverdue ? 'text-rose-400 animate-pulse' : 'text-slate-300 dark:text-slate-600'} />
                         <span className="text-sm font-bold">
                           {(() => {
                             try {
@@ -1229,24 +1243,38 @@ const LoansView = () => {
 
 // --- App Structure ---
 
-const Login = () => {
+const Login = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: () => void }) => {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = async () => {
+  const handleLogin = () => {
+    setError(null);
+    // Safari fix: Trigger popup in the absolute same tick as user click.
+    // We avoid moving login behind any async boundaries or state-induced microtasks.
+    loginWithGoogle()
+      .then(() => {
+        // Success handled by AuthContext
+      })
+      .catch((err: any) => {
+        setLoading(false);
+        if (err.code === 'auth/popup-blocked') {
+          setError("O pop-up de login foi bloqueado. Por favor, habilite pop-ups nas configurações do Safari para este site.");
+        } else {
+          setError("Falha ao tentar entrar. Por favor, tente novamente.");
+        }
+      });
+    
     setLoading(true);
-    try {
-      await loginWithGoogle();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
-      <div className="absolute top-[-20%] right-[-10%] w-[80%] h-[80%] bg-indigo-100/30 blur-[150px] rounded-full" />
-      <div className="absolute bottom-[-20%] left-[-10%] w-[80%] h-[80%] bg-slate-200/40 blur-[150px] rounded-full" />
+    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950 transition-colors duration-300 relative overflow-hidden">
+      <div className="absolute top-[-20%] right-[-10%] w-[80%] h-[80%] bg-indigo-100/30 dark:bg-indigo-900/10 blur-[150px] rounded-full" />
+      <div className="absolute bottom-[-20%] left-[-10%] w-[80%] h-[80%] bg-slate-200/40 dark:bg-slate-900/20 blur-[150px] rounded-full" />
+
+      <div className="absolute top-8 right-8 z-20">
+        <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+      </div>
 
       <motion.div 
         initial={{ opacity: 0, scale: 0.98 }}
@@ -1254,37 +1282,45 @@ const Login = () => {
         transition={{ duration: 0.8, ease: "circOut" }}
         className="w-full max-w-lg relative z-10"
       >
-        <div className="bg-white border border-slate-100 rounded-[40px] p-16 text-center shadow-2xl shadow-indigo-900/5">
-          <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-10 shadow-xl shadow-indigo-200 rotate-3 hover:rotate-0 transition-all duration-500">
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[40px] p-16 text-center shadow-2xl shadow-indigo-900/5 transition-colors duration-300">
+          <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-10 shadow-xl shadow-indigo-200 dark:shadow-indigo-900/40 rotate-3 hover:rotate-0 transition-all duration-500">
             <BookIcon size={36} className="text-white" strokeWidth={2.5} />
           </div>
-          <h1 className="text-4xl font-display font-bold tracking-tight text-slate-800 mb-4">BiblioLuz <span className="text-indigo-600">Gestão</span></h1>
-          <p className="text-slate-400 font-medium mb-12 px-6 leading-relaxed">
+          <h1 className="text-4xl font-display font-bold tracking-tight text-slate-800 dark:text-slate-100 mb-4">BiblioLuz <span className="text-indigo-600 dark:text-indigo-400">Gestão</span></h1>
+          <p className="text-slate-400 dark:text-slate-500 font-medium mb-12 px-6 leading-relaxed">
             Gestão moderna e inteligente para o acervo da biblioteca do Centro Espírita Pedra de Luz.
           </p>
+          
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-2xl text-xs text-red-600 dark:text-red-400 font-bold animate-in fade-in slide-in-from-top-2">
+              {error}
+            </div>
+          )}
           
           <button 
             onClick={handleLogin}
             disabled={loading}
-            className="w-full h-16 flex items-center justify-center gap-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 group shadow-xl shadow-slate-200"
+            className="w-full h-16 flex items-center justify-center gap-4 bg-slate-900 dark:bg-indigo-600 text-white rounded-2xl font-bold hover:bg-slate-800 dark:hover:bg-indigo-700 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 group shadow-xl shadow-slate-200 dark:shadow-indigo-950/20"
           >
             {loading ? (
               <Loader2 className="animate-spin" size={24} />
             ) : (
               <>
-                <svg className="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94L5.84 14.1z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                </svg>
-                Entrar com Google
+                <div className="bg-white p-2 rounded-lg group-hover:scale-110 transition-transform">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94L5.84 14.1z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                  </svg>
+                </div>
+                <span>Entrar com Google</span>
               </>
             )}
           </button>
           
-          <div className="mt-12 pt-8 border-t border-slate-50">
-            <p className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.3em]">Ambiente Seguro & Criptografado</p>
+          <div className="mt-12 pt-8 border-t border-slate-50 dark:border-slate-800">
+            <p className="text-[10px] font-bold text-slate-300 dark:text-slate-600 uppercase tracking-[0.3em]">Ambiente Seguro & Criptografado</p>
           </div>
         </div>
       </motion.div>
@@ -1292,25 +1328,28 @@ const Login = () => {
   );
 };
 
-const Dashboard = () => {
+const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: () => void }) => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'inventory' | 'loans'>('inventory');
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-72 flex-col border-r border-slate-200 bg-white p-8 justify-between shrink-0">
+      <aside className="hidden lg:flex w-72 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 justify-between shrink-0 transition-colors duration-300">
         <div className="space-y-12">
-          <div className="flex items-center gap-3 px-1">
-            <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white shadow-lg shadow-indigo-100">
-              <BookIcon size={18} strokeWidth={2.5} />
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/20">
+                <BookIcon size={18} strokeWidth={2.5} />
+              </div>
+              <span className="text-xl font-display font-bold tracking-tight text-slate-800 dark:text-slate-100">BiblioLuz</span>
             </div>
-            <span className="text-xl font-display font-bold tracking-tight text-slate-800">BiblioLuz</span>
+            <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
           </div>
 
           <nav className="space-y-2">
             <div className="px-3 mb-4">
-              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Principal</h3>
+              <h3 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Principal</h3>
             </div>
             <SidebarItem 
               icon={Library} 
@@ -1327,23 +1366,23 @@ const Dashboard = () => {
           </nav>
         </div>
 
-        <div className="pt-8 border-t border-slate-100">
-          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl mb-6 border border-slate-100">
+        <div className="pt-8 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl mb-6 border border-slate-100 dark:border-slate-800">
             {user?.photoURL ? (
-              <img src={user.photoURL} className="w-10 h-10 rounded-xl border-2 border-white pro-shadow" alt="" referrerPolicy="no-referrer" />
+              <img src={user.photoURL} className="w-10 h-10 rounded-xl border-2 border-white dark:border-slate-700 pro-shadow" alt="" referrerPolicy="no-referrer" />
             ) : (
-              <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center pro-shadow">
+              <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center pro-shadow">
                 <UserIcon size={16} className="text-slate-400" />
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-slate-800 truncate">{user?.displayName}</p>
-              <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-[0.1em] mt-0.5">Administrador</p>
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{user?.displayName}</p>
+              <p className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.1em] mt-0.5">Administrador</p>
             </div>
           </div>
           <button 
             onClick={() => auth.signOut()}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-red-500 transition-all font-bold text-sm"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-red-500 transition-all font-bold text-sm"
           >
             <LogOut size={16} />
             <span>Sair do Sistema</span>
@@ -1354,27 +1393,28 @@ const Dashboard = () => {
       {/* Main Content */}
       <main className="flex-1 min-w-0 flex flex-col">
         {/* Mobile Header */}
-        <header className="lg:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200 p-5 sticky top-0 z-40 flex items-center justify-between">
+        <header className="lg:hidden bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-5 sticky top-0 z-40 flex items-center justify-between transition-colors duration-300">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-100">
               <BookIcon size={16} strokeWidth={2.5} />
             </div>
-            <span className="font-display font-bold tracking-tight text-slate-800">BiblioLuz</span>
+            <span className="font-display font-bold tracking-tight text-slate-800 dark:text-slate-100">BiblioLuz</span>
           </div>
           <div className="flex items-center gap-2">
+             <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
              <button 
                onClick={() => setActiveTab('inventory')} 
-               className={`p-2.5 rounded-xl transition-all ${activeTab === 'inventory' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}
+               className={`p-2.5 rounded-xl transition-all ${activeTab === 'inventory' ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}
              >
                <Library size={18} />
              </button>
              <button 
                onClick={() => setActiveTab('loans')} 
-               className={`p-2.5 rounded-xl transition-all ${activeTab === 'loans' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}
+               className={`p-2.5 rounded-xl transition-all ${activeTab === 'loans' ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}
              >
                <HandHeart size={18} />
              </button>
-             <button onClick={() => auth.signOut()} className="p-2.5 rounded-xl bg-red-50 text-red-500 border border-red-100">
+             <button onClick={() => auth.signOut()} className="p-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 border border-red-100 dark:border-red-900/30">
                <LogOut size={18} />
              </button>
           </div>
@@ -1408,12 +1448,27 @@ export default function App() {
 
 function AppContent() {
   const { user, loading } = useAuth();
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
+    }
+    return 'light';
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
       <div className="relative">
-        <Loader2 className="animate-spin text-slate-200" size={64} strokeWidth={1} />
-        <BookIcon className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600" size={24} />
+        <Loader2 className="animate-spin text-slate-200 dark:text-slate-800" size={64} strokeWidth={1} />
+        <BookIcon className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 dark:text-indigo-500" size={24} />
       </div>
     </div>
   );
@@ -1422,11 +1477,11 @@ function AppContent() {
     <AnimatePresence mode="wait">
       {user ? (
         <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <Dashboard />
+          <Dashboard theme={theme} toggleTheme={toggleTheme} />
         </motion.div>
       ) : (
         <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <Login />
+          <Login theme={theme} toggleTheme={toggleTheme} />
         </motion.div>
       )}
     </AnimatePresence>

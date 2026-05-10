@@ -77,12 +77,11 @@ export async function testConnection() {
   }
 }
 
-export const loginWithGoogle = async () => {
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    return result.user;
-  } catch (error) {
-    console.error("Login failed:", error);
-    throw error;
-  }
+export const loginWithGoogle = () => {
+  return signInWithPopup(auth, googleProvider)
+    .then(result => result.user)
+    .catch(error => {
+      console.error("Login failed:", error);
+      throw error;
+    });
 };
