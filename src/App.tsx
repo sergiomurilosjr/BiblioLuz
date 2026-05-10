@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import { 
   Book as BookIcon, 
   Search, 
@@ -75,9 +75,8 @@ interface BookCardProps {
   onDelete: () => void | Promise<void>;
 }
 
-const BookCard: React.FC<BookCardProps> = ({ book, onLoan, onEdit, onDelete }) => (
+const BookCard = memo(({ book, onLoan, onEdit, onDelete }: BookCardProps) => (
   <motion.div 
-    layout
     initial={{ opacity: 0, y: 15 }}
     animate={{ opacity: 1, y: 0 }}
     className="glass-card flex flex-col h-full rounded-xl group relative hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-500 overflow-hidden"
@@ -87,6 +86,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, onLoan, onEdit, onDelete }) =
         <img 
           src={book.coverUrl} 
           alt={book.title} 
+          loading="lazy"
           className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
           referrerPolicy="no-referrer"
         />
@@ -147,7 +147,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, onLoan, onEdit, onDelete }) =
       </div>
     </div>
   </motion.div>
-);
+));
 
 // --- Modals ---
 
@@ -801,19 +801,20 @@ const LibraryView = () => {
   };
 
   const filteredBooks = useMemo(() => {
+    const s = search.toLowerCase();
     return books.filter(b => 
-      (b.title || '').toLowerCase().includes(search.toLowerCase()) || 
-      (b.author || '').toLowerCase().includes(search.toLowerCase()) ||
+      (b.title || '').toLowerCase().includes(s) || 
+      (b.author || '').toLowerCase().includes(s) ||
       (b.isbn || '').includes(search) ||
-      (b.cdeIndex || '').toLowerCase().includes(search.toLowerCase())
+      (b.cdeIndex || '').toLowerCase().includes(s)
     );
   }, [books, search]);
 
-  const stats = {
+  const stats = useMemo(() => ({
     total: books.length,
     available: books.filter(b => b.status === 'available').length,
     loaned: books.filter(b => b.status === 'loaned').length
-  };
+  }), [books]);
 
   if (loading && books.length === 0) return (
     <div className="h-[60vh] flex items-center justify-center">
@@ -865,14 +866,14 @@ const LibraryView = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" style={{ contentVisibility: 'auto' }}>
         <StatCard label="Total de Livros" value={stats.total} icon={Library} colorClass="bg-indigo-600" highlight />
         <StatCard label="Disponíveis agora" value={stats.available} icon={CheckCircle2} colorClass="bg-emerald-500" />
         <StatCard label="Em circulação" value={stats.loaned} icon={HandHeart} colorClass="bg-amber-500" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-        <AnimatePresence mode="popLayout">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6" style={{ contentVisibility: 'auto' }}>
+        <AnimatePresence>
           {filteredBooks.map(book => (
             <BookCard 
               key={book.id} 
@@ -929,6 +930,7 @@ const LoansView = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     loadLoans();
@@ -1000,16 +1002,18 @@ const LoansView = () => {
     }
   };
 
-  const overdueCount = loans.filter(l => {
-    if (l.status !== 'active') return false;
-    try {
-      const dueDate = l.dueDate?.toDate ? l.dueDate.toDate() : new Date(l.dueDate);
-      if (isNaN(dueDate.getTime())) return false;
-      return dueDate < new Date();
-    } catch (e) {
-      return false;
-    }
-  }).length;
+  const overdueCount = useMemo(() => {
+    return loans.filter(l => {
+      if (l.status !== 'active') return false;
+      try {
+        const dueDate = l.dueDate?.toDate ? l.dueDate.toDate() : new Date(l.dueDate);
+        if (isNaN(dueDate.getTime())) return false;
+        return dueDate < new Date();
+      } catch (e) {
+        return false;
+      }
+    }).length;
+  }, [loans]);
 
   if (loading && loans.length === 0) return (
     <div className="h-[60vh] flex items-center justify-center">
@@ -1123,12 +1127,13 @@ const LoansView = () => {
                           <button 
                             onClick={() => {
                               navigator.clipboard.writeText(loan.borrowerPhone);
-                              alert('Número copiado!');
+                              setCopiedId(loan.id!);
+                              setTimeout(() => setCopiedId(null), 2000);
                             }}
                             className="text-[10px] text-indigo-500 font-bold mt-0.5 hover:text-indigo-700 transition-colors flex items-center gap-1 group/phone"
                             title="Clique para copiar"
                           >
-                            <span>{loan.borrowerPhone}</span>
+                            <span>{copiedId === loan.id ? 'Copiado!' : loan.borrowerPhone}</span>
                             <Copy size={10} className="text-indigo-400 opacity-60 group-hover/phone:opacity-100" />
                           </button>
                         )}
