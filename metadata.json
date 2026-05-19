@@ -1,6 +1,6 @@
 {
   "name": "BiblioLuz",
   "description": "Um gerenciador de biblioteca moderno para organizar estoque, realizar buscas e gerenciar empréstimos de livros da biblioteca do Centro Espírita Pedra de Luz.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": []
 }

@@ -19,7 +19,10 @@ import {
   History,
   Copy,
   Sun,
-  Moon
+  Moon,
+  Camera,
+  RefreshCw,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -27,6 +30,7 @@ import { loginWithGoogle, auth } from './lib/firebase';
 import { libraryService, Book, Loan } from './services/libraryService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { CameraCapture } from './components/CameraCapture';
 
 // --- Theme ---
 
@@ -206,6 +210,35 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
     description: book?.description || ''
   });
   const [loading, setLoading] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
+
+  const handleAutoFill = async () => {
+    if (!formData.isbn || formData.isbn.length < 10) {
+      alert('Por favor, informe um ISBN válido (10 ou 13 dígitos) para buscar.');
+      return;
+    }
+
+    setIsAutoFilling(true);
+    try {
+      const bookInfo = await libraryService.fetchBookInfo(formData.isbn);
+      if (bookInfo) {
+        setFormData(prev => ({
+          ...prev,
+          title: bookInfo.title || prev.title,
+          author: bookInfo.author || prev.author,
+          description: bookInfo.description || prev.description,
+          coverUrl: bookInfo.coverUrl || prev.coverUrl,
+          year: bookInfo.year || prev.year,
+          category: bookInfo.category || prev.category,
+        }));
+      } else {
+        alert('Nenhum livro encontrado com este ISBN.');
+      }
+    } finally {
+      setIsAutoFilling(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,11 +301,23 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">ISBN</label>
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1 flex items-center justify-between">
+              <span>ISBN</span>
+              <button 
+                type="button"
+                onClick={handleAutoFill}
+                disabled={isAutoFilling || !formData.isbn}
+                className="text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1 hover:underline disabled:opacity-30 transition-all"
+              >
+                {isAutoFilling ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                <span>Auto-preencher</span>
+              </button>
+            </label>
             <input 
               type="text" 
               className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors" 
               value={formData.isbn}
+              placeholder="Ex: 978..."
               onChange={e => setFormData({ ...formData, isbn: e.target.value })}
             />
           </div>
@@ -321,15 +366,48 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
         </div>
 
         <div className="space-y-1">
-          <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">URL da Capa</label>
-          <input 
-            type="url" 
-            placeholder="https://..."
-            className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors" 
-            value={formData.coverUrl}
-            onChange={e => setFormData({ ...formData, coverUrl: e.target.value })}
-          />
+          <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1 flex items-center justify-between">
+            <span>Imagem da Capa</span>
+            <button 
+              type="button"
+              onClick={() => setIsCameraOpen(true)}
+              className="text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1 hover:underline transition-all"
+            >
+              <Camera size={10} />
+              <span>Tirar Foto</span>
+            </button>
+          </label>
+          <div className="flex gap-2">
+            <div className="w-14 h-20 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden shadow-inner flex items-center justify-center text-slate-400 flex-shrink-0 border border-slate-200 dark:border-slate-700">
+              {formData.coverUrl ? (
+                <img src={formData.coverUrl} alt="Capa" className="w-full h-full object-cover" />
+              ) : (
+                <RefreshCw size={16} className="opacity-20" />
+              )}
+            </div>
+            <input 
+              type="url" 
+              placeholder="Cole a URL da capa aqui..."
+              className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors self-center" 
+              value={formData.coverUrl}
+              onChange={e => setFormData({ ...formData, coverUrl: e.target.value })}
+            />
+          </div>
         </div>
+
+        <AnimatePresence>
+          {isCameraOpen && (
+            <CameraCapture 
+              onCapture={(dataUrl) => {
+                // In a real app, you'd upload this to Firebase Storage. 
+                // For this MVP, we use the base64 URL directly.
+                setFormData({ ...formData, coverUrl: dataUrl });
+                setIsCameraOpen(false);
+              }}
+              onClose={() => setIsCameraOpen(false)}
+            />
+          )}
+        </AnimatePresence>
         <div className="space-y-1">
           <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Descrição</label>
           <textarea 

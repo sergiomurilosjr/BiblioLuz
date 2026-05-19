@@ -13,6 +13,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import axios from 'axios';
 
 export interface Book {
   id?: string;
@@ -238,6 +239,27 @@ export const libraryService = {
       await deleteDoc(doc(db, BOOKS_COL, bookId));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `${BOOKS_COL}/${bookId}`);
+    }
+  },
+
+  async fetchBookInfo(isbn: string) {
+    try {
+      const response = await axios.get(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+      if (response.data.totalItems > 0) {
+        const item = response.data.items[0].volumeInfo;
+        return {
+          title: item.title || '',
+          author: item.authors ? item.authors.join(', ') : '',
+          description: item.description || '',
+          coverUrl: item.imageLinks ? (item.imageLinks.thumbnail || item.imageLinks.smallThumbnail) : '',
+          year: item.publishedDate ? item.publishedDate.split('-')[0] : '',
+          category: item.categories ? item.categories[0] : '',
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching book info:', error);
+      return null;
     }
   },
 
