@@ -158,8 +158,7 @@ export const libraryService = {
     
     try {
       const q = query(
-        collection(db, BOOKS_COL), 
-        orderBy('createdAt', 'desc')
+        collection(db, BOOKS_COL)
       );
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Book));
@@ -267,8 +266,7 @@ export const libraryService = {
 
     try {
       const q = query(
-        collection(db, LOANS_COL),
-        orderBy('loanDate', 'desc')
+        collection(db, LOANS_COL)
       );
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Loan));

@@ -53,56 +53,37 @@ service cloud.firestore {
     }
 
     // --- Collections ---
-
-    match /books/{bookId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      
-      allow create: if isSignedIn() && isValidId(bookId) && isValidBook(incoming())
+    match /books/{document} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && isValidId(document) && isValidBook(incoming())
                     && (incoming().get('createdAt', request.time) == request.time)
                     && (incoming().get('updatedAt', request.time) == request.time);
       
-      allow update: if isSignedIn() && isValidBook(incoming()) 
+      allow update: if request.auth != null && isValidBook(incoming()) 
                     && (incoming().get('createdAt', existing().createdAt) == existing().createdAt)
-                    && (incoming().get('updatedAt', request.time) == request.time)
-                    && (
-        // Action: General Edit
-        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'author', 'isbn', 'category', 'cdeIndex', 'edition', 'year', 'acquisitionType', 'supplier', 'description', 'coverUrl', 'updatedAt']) ||
-        // Action: Simple Status Change (e.g. when loaning)
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'ownerId'])
-      );
-      
-      allow delete: if isSignedIn();
+                    && (incoming().get('updatedAt', request.time) == request.time);
+
+      allow delete: if request.auth != null;
     }
 
-    match /loans/{loanId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      
-      allow create: if isSignedIn() && isValidId(loanId) && isValidLoan(incoming())
+    match /loans/{document} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && isValidId(document) && isValidLoan(incoming())
                     && (incoming().get('createdAt', request.time) == request.time)
                     && (incoming().get('updatedAt', request.time) == request.time);
       
-      allow update: if isSignedIn() && isValidLoan(incoming())
+      allow update: if request.auth != null && isValidLoan(incoming())
                     && (incoming().get('createdAt', existing().get('createdAt', request.time)) == existing().get('createdAt', request.time))
-                    && (incoming().get('updatedAt', request.time) == request.time)
-                    && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'returnDate', 'loanDate', 'dueDate', 'borrowerName', 'borrowerEmail', 'borrowerPhone', 'responsible', 'notes', 'updatedAt', 'ownerId'])
-      );
+                    && (incoming().get('updatedAt', request.time) == request.time);
       
-      allow delete: if isSignedIn();
+      allow delete: if request.auth != null;
     }
 
-    match /borrowers/{borrowerId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      
-      allow create: if isSignedIn() && isValidId(borrowerId) && isValidBorrower(incoming());
-      
-      allow update: if isSignedIn() && isValidBorrower(incoming())
-                    && (incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'phone', 'lastBorrowed', 'ownerId']));
-      
-      allow delete: if isSignedIn();
+    match /borrowers/{document} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && isValidId(document) && isValidBorrower(incoming());
+      allow update: if request.auth != null && isValidBorrower(incoming());
+      allow delete: if request.auth != null;
     }
   }
 }
