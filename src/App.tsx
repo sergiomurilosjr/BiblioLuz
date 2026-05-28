@@ -1327,22 +1327,24 @@ const Login = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: (
 
   const handleLogin = () => {
     setError(null);
-    // Safari fix: Trigger popup in the absolute same tick as user click.
-    // We avoid moving login behind any async boundaries or state-induced microtasks.
+    setLoading(true);
+    
     loginWithGoogle()
       .then(() => {
         // Success handled by AuthContext
       })
       .catch((err: any) => {
         setLoading(false);
+        console.error("Auth error details:", err);
+        
         if (err.code === 'auth/popup-blocked') {
-          setError("O pop-up de login foi bloqueado. Por favor, habilite pop-ups nas configurações do Safari para este site.");
+          setError("O pop-up de login foi bloqueado. Por favor, habilite pop-ups nas configurações do seu navegador ou tente abrir o app em uma nova guia.");
+        } else if (err.code === 'auth/network-request-failed') {
+          setError("Erro de rede. Verifique sua conexão ou tente novamente em instantes.");
         } else {
-          setError("Falha ao tentar entrar. Por favor, tente novamente.");
+          setError("Não foi possível realizar o login. Se estiver usando o navegador Chrome no desktop, tente abrir o app em uma nova aba usando o botão no canto superior direito.");
         }
       });
-    
-    setLoading(true);
   };
 
   return (

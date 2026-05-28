@@ -74,7 +74,6 @@ export const libraryService = {
     try {
       const q = query(
         collection(db, BORROWERS_COL),
-        where('ownerId', '==', userId),
         orderBy('name', 'asc')
       );
       const snapshot = await getDocs(q);
@@ -93,7 +92,6 @@ export const libraryService = {
       // Check if borrower already exists by phone (unique enough for this app)
       const q = query(
         collection(db, BORROWERS_COL),
-        where('ownerId', '==', userId),
         where('phone', '==', borrowerData.phone)
       );
       const snapshot = await getDocs(q);
@@ -161,7 +159,6 @@ export const libraryService = {
     try {
       const q = query(
         collection(db, BOOKS_COL), 
-        where('ownerId', '==', userId),
         orderBy('createdAt', 'desc')
       );
       const snapshot = await getDocs(q);
@@ -271,7 +268,6 @@ export const libraryService = {
     try {
       const q = query(
         collection(db, LOANS_COL),
-        where('ownerId', '==', userId),
         orderBy('loanDate', 'desc')
       );
       const snapshot = await getDocs(q);

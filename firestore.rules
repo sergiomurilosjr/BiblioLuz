@@ -8,7 +8,7 @@ service cloud.firestore {
 
     // --- Helpers ---
     function isSignedIn() { return request.auth != null; }
-    function isOwner(data) { return isSignedIn() && data.ownerId == request.auth.uid; }
+    function isOwner(data) { return isSignedIn(); } // Changed to allow all signed-in users to access shared library
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
@@ -19,7 +19,6 @@ service cloud.firestore {
       return data.title is string && data.title.size() <= 2000
           && data.author is string && data.author.size() <= 1000
           && data.status in ['available', 'loaned']
-          && data.ownerId == request.auth.uid
           && (data.get('isbn', '') is string && data.get('isbn', '').size() <= 200)
           && (data.get('category', '') is string && data.get('category', '').size() <= 1000)
           && (data.get('cdeIndex', '') is string && data.get('cdeIndex', '').size() <= 500)
@@ -36,7 +35,6 @@ service cloud.firestore {
           && data.bookTitle is string && data.bookTitle.size() <= 2000
           && data.borrowerName is string && data.borrowerName.size() >= 1 && data.borrowerName.size() <= 1000
           && data.status in ['active', 'returned', 'overdue', 'lost']
-          && data.ownerId == request.auth.uid
           && (data.loanDate is timestamp || data.loanDate == request.time)
           && (data.get('cdeIndex', '') is string && data.get('cdeIndex', '').size() <= 500)
           && (data.get('borrowerPhone', '') is string && data.get('borrowerPhone', '').size() <= 200)
@@ -50,7 +48,6 @@ service cloud.firestore {
     function isValidBorrower(data) {
       return data.name is string && data.name.size() >= 1 && data.name.size() <= 1000
           && data.phone is string && data.phone.size() >= 1 && data.phone.size() <= 200
-          && data.ownerId == request.auth.uid
           && (data.get('email', '') is string && data.get('email', '').size() <= 500)
           && (data.get('lastBorrowed', null) == null || data.lastBorrowed is timestamp);
     }
@@ -58,54 +55,54 @@ service cloud.firestore {
     // --- Collections ---
 
     match /books/{bookId} {
-      allow get: if isOwner(existing());
-      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
       
       allow create: if isSignedIn() && isValidId(bookId) && isValidBook(incoming())
                     && (incoming().get('createdAt', request.time) == request.time)
                     && (incoming().get('updatedAt', request.time) == request.time);
       
-      allow update: if isOwner(existing()) && isValidBook(incoming()) 
+      allow update: if isSignedIn() && isValidBook(incoming()) 
                     && (incoming().get('createdAt', existing().createdAt) == existing().createdAt)
                     && (incoming().get('updatedAt', request.time) == request.time)
                     && (
         // Action: General Edit
         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'author', 'isbn', 'category', 'cdeIndex', 'edition', 'year', 'acquisitionType', 'supplier', 'description', 'coverUrl', 'updatedAt']) ||
         // Action: Simple Status Change (e.g. when loaning)
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'ownerId'])
       );
       
-      allow delete: if isOwner(existing());
+      allow delete: if isSignedIn();
     }
 
     match /loans/{loanId} {
-      allow get: if isOwner(existing());
-      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
       
       allow create: if isSignedIn() && isValidId(loanId) && isValidLoan(incoming())
                     && (incoming().get('createdAt', request.time) == request.time)
                     && (incoming().get('updatedAt', request.time) == request.time);
       
-      allow update: if isOwner(existing()) && isValidLoan(incoming())
+      allow update: if isSignedIn() && isValidLoan(incoming())
                     && (incoming().get('createdAt', existing().get('createdAt', request.time)) == existing().get('createdAt', request.time))
                     && (incoming().get('updatedAt', request.time) == request.time)
                     && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'returnDate', 'loanDate', 'dueDate', 'borrowerName', 'borrowerEmail', 'borrowerPhone', 'responsible', 'notes', 'updatedAt'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'returnDate', 'loanDate', 'dueDate', 'borrowerName', 'borrowerEmail', 'borrowerPhone', 'responsible', 'notes', 'updatedAt', 'ownerId'])
       );
       
-      allow delete: if isOwner(existing());
+      allow delete: if isSignedIn();
     }
 
     match /borrowers/{borrowerId} {
-      allow get: if isOwner(existing());
-      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
       
       allow create: if isSignedIn() && isValidId(borrowerId) && isValidBorrower(incoming());
       
-      allow update: if isOwner(existing()) && isValidBorrower(incoming())
-                    && (incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'phone', 'lastBorrowed']));
+      allow update: if isSignedIn() && isValidBorrower(incoming())
+                    && (incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'phone', 'lastBorrowed', 'ownerId']));
       
-      allow delete: if isOwner(existing());
+      allow delete: if isSignedIn();
     }
   }
 }
