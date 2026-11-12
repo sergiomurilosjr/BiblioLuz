@@ -1420,7 +1420,7 @@ const LoansView = () => {
 
 // --- App Structure ---
 
-const Login = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: () => void }) => {
+const Login = ({ theme, toggleTheme, isKiosk = false }: { theme: 'light' | 'dark', toggleTheme: () => void, isKiosk?: boolean }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1461,13 +1461,17 @@ const Login = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: (
         transition={{ duration: 0.8, ease: "circOut" }}
         className="w-full max-w-lg relative z-10"
       >
-        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[40px] p-16 text-center shadow-2xl shadow-indigo-900/5 transition-colors duration-300">
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[40px] p-12 sm:p-16 text-center shadow-2xl shadow-indigo-900/5 transition-colors duration-300">
           <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-10 shadow-xl shadow-indigo-200 dark:shadow-indigo-900/40 rotate-3 hover:rotate-0 transition-all duration-500">
-            <BookIcon size={36} className="text-white" strokeWidth={2.5} />
+            {isKiosk ? <Tablet size={36} className="text-white" strokeWidth={2.2} /> : <BookIcon size={36} className="text-white" strokeWidth={2.5} />}
           </div>
-          <h1 className="text-4xl font-display font-bold tracking-tight text-slate-800 dark:text-slate-100 mb-4">BiblioLuz <span className="text-indigo-600 dark:text-indigo-400">Gestão</span></h1>
-          <p className="text-slate-400 dark:text-slate-500 font-medium mb-12 px-6 leading-relaxed">
-            Gestão moderna e inteligente para o acervo da biblioteca do Centro Espírita Pedra de Luz.
+          <h1 className="text-3xl sm:text-4xl font-display font-bold tracking-tight text-slate-800 dark:text-slate-100 mb-4">
+            BiblioLuz <span className="text-indigo-600 dark:text-indigo-400">{isKiosk ? 'Autoatendimento' : 'Gestão'}</span>
+          </h1>
+          <p className="text-slate-400 dark:text-slate-500 font-medium mb-12 px-4 leading-relaxed">
+            {isKiosk
+              ? 'Terminal exclusivo para empréstimo e devolução de livros da biblioteca do Centro Espírita Pedra de Luz.'
+              : 'Gestão moderna e inteligente para o acervo da biblioteca do Centro Espírita Pedra de Luz.'}
           </p>
           
           {error && (
@@ -1644,6 +1648,54 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
   );
 };
 
+const StandaloneKioskLayout = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: () => void }) => {
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+      <header className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-6 py-4 sticky top-0 z-40">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-sm">
+              <BookIcon size={17} strokeWidth={2.5} />
+            </div>
+            <span className="text-lg font-display font-bold tracking-tight text-slate-800 dark:text-slate-100 whitespace-nowrap">
+              BiblioLuz
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+            <button
+              type="button"
+              onClick={() => auth.signOut()}
+              className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors border border-slate-200 dark:border-slate-700"
+              title="Encerrar sessão"
+              aria-label="Encerrar sessão"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 w-full max-w-5xl mx-auto px-6 py-8 md:py-12">
+        <SelfServiceView standalone={true} />
+      </main>
+    </div>
+  );
+};
+
+function isStandaloneKioskRoute() {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+  const params = new URLSearchParams(window.location.search);
+  return (
+    path === '/autoatendimento' ||
+    path.startsWith('/autoatendimento/') ||
+    hash.includes('autoatendimento') ||
+    params.get('modo') === 'autoatendimento'
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -1654,6 +1706,7 @@ export default function App() {
 
 function AppContent() {
   const { user, loading } = useAuth();
+  const [isKioskRoute] = useState<boolean>(() => isStandaloneKioskRoute());
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -1693,12 +1746,18 @@ function AppContent() {
     <div className={`${theme} min-h-screen`}>
       <AnimatePresence mode="wait">
         {user ? (
-          <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <Dashboard theme={theme} toggleTheme={toggleTheme} />
-          </motion.div>
+          isKioskRoute ? (
+            <motion.div key="standalone-kiosk" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <StandaloneKioskLayout theme={theme} toggleTheme={toggleTheme} />
+            </motion.div>
+          ) : (
+            <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <Dashboard theme={theme} toggleTheme={toggleTheme} />
+            </motion.div>
+          )
         ) : (
           <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <Login theme={theme} toggleTheme={toggleTheme} />
+            <Login theme={theme} toggleTheme={toggleTheme} isKiosk={isKioskRoute} />
           </motion.div>
         )}
       </AnimatePresence>
