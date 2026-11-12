@@ -16,8 +16,7 @@ import {
   Phone,
   Mail,
   RefreshCw,
-  Link2,
-  Check,
+  MoreVertical,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, addDays } from 'date-fns';
@@ -36,15 +35,11 @@ interface CompletedLoanSummary {
   dueDate: Date;
 }
 
-interface SelfServiceViewProps {
-  standalone?: boolean;
-}
-
-export const SelfServiceView = ({ standalone = false }: SelfServiceViewProps) => {
+export const SelfServiceView = () => {
   const [step, setStep] = useState<KioskStep>('home');
   const [isTotemMode, setIsTotemMode] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const [books, setBooks] = useState<Book[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -68,19 +63,6 @@ export const SelfServiceView = ({ standalone = false }: SelfServiceViewProps) =>
   const [confirmingLoan, setConfirmingLoan] = useState<Loan | null>(null);
   const [returnedLoanSummary, setReturnedLoanSummary] = useState<Loan | null>(null);
 
-  const selfServiceUrl =
-    typeof window !== 'undefined' ? `${window.location.origin}/autoatendimento` : '/autoatendimento';
-
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(selfServiceUrl);
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2500);
-    } catch {
-      setErrorMsg(`Copie este endereço: ${selfServiceUrl}`);
-    }
-  };
-
   const loadData = async () => {
     setLoading(true);
     setErrorMsg(null);
@@ -88,7 +70,7 @@ export const SelfServiceView = ({ standalone = false }: SelfServiceViewProps) =>
       const [booksData, loansData, borrowersData] = await Promise.all([
         libraryService.getBooks(),
         libraryService.getLoans(),
-        standalone ? Promise.resolve([] as Borrower[]) : libraryService.getBorrowers(),
+        libraryService.getBorrowers(),
       ]);
       setBooks(booksData);
       setLoans(loansData);
@@ -103,7 +85,7 @@ export const SelfServiceView = ({ standalone = false }: SelfServiceViewProps) =>
 
   useEffect(() => {
     loadData();
-  }, [standalone]);
+  }, []);
 
   const availableBooks = useMemo(
     () => books.filter((b) => b.status === 'available'),
@@ -167,13 +149,12 @@ export const SelfServiceView = ({ standalone = false }: SelfServiceViewProps) =>
   }, [activeLoans, returnSearch]);
 
   const borrowerSuggestions = useMemo(() => {
-    if (standalone) return [];
     const q = borrowerName.trim().toLowerCase();
     if (!q || !showSuggestions) return [];
     return borrowers
       .filter((b) => (b.name || '').toLowerCase().includes(q))
       .slice(0, 5);
-  }, [borrowers, borrowerName, showSuggestions, standalone]);
+  }, [borrowers, borrowerName, showSuggestions]);
 
   const resetToHome = () => {
     setStep('home');
@@ -295,8 +276,18 @@ export const SelfServiceView = ({ standalone = false }: SelfServiceViewProps) =>
   const content = (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
+      <div className="flex items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
         <div>
+          {step !== 'home' && (
+            <button
+              type="button"
+              onClick={resetToHome}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 mb-2 transition-colors"
+            >
+              <ArrowLeft size={14} />
+              <span>Voltar ao início</span>
+            </button>
+          )}
           <h1 className="text-3xl font-display font-bold tracking-tight text-slate-800 dark:text-slate-100">
             Autoatendimento
           </h1>
@@ -305,86 +296,65 @@ export const SelfServiceView = ({ standalone = false }: SelfServiceViewProps) =>
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
-          {step !== 'home' && (
-            <button
-              type="button"
-              onClick={resetToHome}
-              className="btn-secondary text-sm px-4 py-2.5 whitespace-nowrap shrink-0"
-            >
-              <ArrowLeft size={16} />
-              <span>Início</span>
-            </button>
-          )}
+        {/* Discreet Utility Menu */}
+        <div className="relative shrink-0">
           <button
             type="button"
-            onClick={loadData}
-            disabled={loading}
-            className="btn-secondary text-sm px-3.5 py-2.5 whitespace-nowrap shrink-0"
-            title="Atualizar acervo"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            onBlur={() => setTimeout(() => setMenuOpen(false), 180)}
+            className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition-colors"
+            title="Opções do autoatendimento"
+            aria-label="Opções do autoatendimento"
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            <span className="hidden sm:inline">Atualizar</span>
+            <MoreVertical size={18} />
           </button>
-          {!standalone && !isTotemMode && (
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              className="btn-secondary text-sm px-4 py-2.5 whitespace-nowrap shrink-0"
-              title={selfServiceUrl}
-            >
-              {linkCopied ? (
-                <>
-                  <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-emerald-700 dark:text-emerald-300">Link Copiado</span>
-                </>
+
+          {menuOpen && (
+            <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1.5 z-30">
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setMenuOpen(false);
+                  loadData();
+                }}
+                disabled={loading}
+                className="w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2.5"
+              >
+                <RefreshCw size={15} className={loading ? 'animate-spin text-indigo-500' : 'text-slate-400'} />
+                <span>Atualizar acervo</span>
+              </button>
+              {!isTotemMode ? (
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setMenuOpen(false);
+                    setIsTotemMode(true);
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2.5"
+                >
+                  <Maximize2 size={15} className="text-slate-400" />
+                  <span>Modo Totem (tela cheia)</span>
+                </button>
               ) : (
-                <>
-                  <Link2 size={16} className="text-indigo-600 dark:text-indigo-400" />
-                  <span>Copiar Link Exclusivo</span>
-                </>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setMenuOpen(false);
+                    setShowExitConfirm(true);
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2.5"
+                >
+                  <Minimize2 size={15} className="text-slate-400" />
+                  <span>Sair do Modo Totem</span>
+                </button>
               )}
-            </button>
-          )}
-          {!standalone && (
-            !isTotemMode ? (
-              <button
-                type="button"
-                onClick={() => setIsTotemMode(true)}
-                className="btn-primary text-sm px-4 py-2.5 whitespace-nowrap shrink-0"
-              >
-                <Maximize2 size={16} />
-                <span>Modo Totem</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowExitConfirm(true)}
-                className="btn-secondary text-sm px-4 py-2.5 whitespace-nowrap shrink-0"
-              >
-                <Minimize2 size={16} />
-                <span>Modo Gestão</span>
-              </button>
-            )
+            </div>
           )}
         </div>
       </div>
-
-      {!standalone && !isTotemMode && step === 'home' && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-xl bg-slate-100/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs">
-          <div className="min-w-0">
-            <span className="font-semibold text-slate-600 dark:text-slate-300">
-              Link exclusivo do autoatendimento:{' '}
-            </span>
-            <span className="font-mono text-indigo-600 dark:text-indigo-400 break-all">
-              {selfServiceUrl}
-            </span>
-          </div>
-          <span className="text-slate-500 dark:text-slate-400 shrink-0">
-            Quem acessar por este link não verá o acervo administrativo nem os históricos.
-          </span>
-        </div>
-      )}
 
       {/* Global Error */}
       {errorMsg && (
@@ -695,9 +665,7 @@ export const SelfServiceView = ({ standalone = false }: SelfServiceViewProps) =>
                       2. Informe seus dados
                     </h2>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                      {standalone
-                        ? 'Preencha seu nome e telefone para concluir a retirada do livro.'
-                        : 'Se você já pegou livros antes, digite seu nome para preencher automaticamente.'}
+                      Se você já pegou livros antes, digite seu nome para preencher automaticamente.
                     </p>
                   </div>
 
