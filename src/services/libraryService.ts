@@ -65,6 +65,16 @@ const BOOKS_COL = 'books';
 const LOANS_COL = 'loans';
 const BORROWERS_COL = 'borrowers';
 
+function stripUndefined<T extends Record<string, any>>(data: T): Partial<T> {
+  const clean: Record<string, any> = {};
+  Object.entries(data).forEach(([key, value]) => {
+    if (value !== undefined) {
+      clean[key] = value;
+    }
+  });
+  return clean as Partial<T>;
+}
+
 export const libraryService = {
   // Borrowers
   async getBorrowers() {
@@ -89,6 +99,7 @@ export const libraryService = {
     if (!userId) throw new Error('User not authenticated');
 
     try {
+      const cleanBorrower = stripUndefined(borrowerData);
       // Check if borrower already exists by phone (unique enough for this app)
       const q = query(
         collection(db, BORROWERS_COL),
@@ -100,14 +111,14 @@ export const libraryService = {
         // Update existing
         const borrowerDoc = snapshot.docs[0];
         await updateDoc(doc(db, BORROWERS_COL, borrowerDoc.id), {
-          ...borrowerData,
+          ...cleanBorrower,
           lastBorrowed: serverTimestamp(),
         });
         return borrowerDoc.id;
       } else {
         // Create new
         const docRef = await addDoc(collection(db, BORROWERS_COL), {
-          ...borrowerData,
+          ...cleanBorrower,
           ownerId: userId,
           lastBorrowed: serverTimestamp(),
         });
@@ -173,8 +184,9 @@ export const libraryService = {
     if (!userId) throw new Error('User not authenticated');
 
     try {
+      const cleanBook = stripUndefined(bookData);
       const docRef = await addDoc(collection(db, BOOKS_COL), {
-        ...bookData,
+        ...cleanBook,
         ownerId: userId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -187,9 +199,10 @@ export const libraryService = {
 
   async updateBook(bookId: string, bookData: Partial<Book>) {
     try {
+      const cleanBook = stripUndefined(bookData);
       const bookRef = doc(db, BOOKS_COL, bookId);
       await updateDoc(bookRef, {
-        ...bookData,
+        ...cleanBook,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -289,10 +302,12 @@ export const libraryService = {
       });
 
       // 2. Create the loan
+      const cleanLoan = stripUndefined(loanData);
       const loanRef = await addDoc(collection(db, LOANS_COL), {
-        ...loanData,
+        ...cleanLoan,
         ownerId: userId,
         status: 'active',
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
@@ -330,9 +345,10 @@ export const libraryService = {
 
   async updateLoan(loanId: string, loanData: Partial<Loan>) {
     try {
+      const cleanLoan = stripUndefined(loanData);
       const loanRef = doc(db, LOANS_COL, loanId);
       await updateDoc(loanRef, {
-        ...loanData,
+        ...cleanLoan,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {

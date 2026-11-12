@@ -27,7 +27,7 @@ service cloud.firestore {
           && (data.get('acquisitionType', '') is string && data.get('acquisitionType', '').size() <= 1000)
           && (data.get('supplier', '') is string && data.get('supplier', '').size() <= 1000)
           && (data.get('description', '') is string && data.get('description', '').size() <= 40000)
-          && (data.get('coverUrl', '') is string && data.get('coverUrl', '').size() <= 5000);
+          && (data.get('coverUrl', '') is string && data.get('coverUrl', '').size() <= 300000);
     }
 
     function isValidLoan(data) {
@@ -60,7 +60,7 @@ service cloud.firestore {
                     && (incoming().get('updatedAt', request.time) == request.time);
       
       allow update: if request.auth != null && isValidBook(incoming()) 
-                    && (incoming().get('createdAt', existing().createdAt) == existing().createdAt)
+                    && (incoming().get('createdAt', existing().get('createdAt', request.time)) == existing().get('createdAt', request.time))
                     && (incoming().get('updatedAt', request.time) == request.time);
 
       allow delete: if request.auth != null;

@@ -22,7 +22,11 @@ import {
   Moon,
   Camera,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Tablet,
+  Upload,
+  AlertCircle,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -31,6 +35,9 @@ import { libraryService, Book, Loan } from './services/libraryService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CameraCapture } from './components/CameraCapture';
+import { SelfServiceView } from './components/SelfServiceView';
+import { compressCoverImage } from './lib/imageUtils';
+import { exportBooksToSpreadsheet, exportLoansToSpreadsheet } from './lib/exportSpreadsheet';
 
 // --- Theme ---
 
@@ -212,13 +219,16 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
   const [loading, setLoading] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleAutoFill = async () => {
     if (!formData.isbn || formData.isbn.length < 10) {
-      alert('Por favor, informe um ISBN válido (10 ou 13 dígitos) para buscar.');
+      setSubmitError('Por favor, informe um ISBN válido (10 ou 13 dígitos) para buscar.');
       return;
     }
 
+    setSubmitError(null);
     setIsAutoFilling(true);
     try {
       const bookInfo = await libraryService.fetchBookInfo(formData.isbn);
@@ -233,16 +243,31 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
           category: bookInfo.category || prev.category,
         }));
       } else {
-        alert('Nenhum livro encontrado com este ISBN.');
+        setSubmitError('Nenhum livro encontrado com este ISBN.');
       }
     } finally {
       setIsAutoFilling(false);
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSubmitError(null);
+    try {
+      const compressed = await compressCoverImage(file);
+      setFormData(prev => ({ ...prev, coverUrl: compressed }));
+    } catch {
+      setSubmitError('Não foi possível processar a imagem selecionada.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setSubmitError(null);
     try {
       if (book?.id) {
         await libraryService.updateBook(book.id, formData);
@@ -250,14 +275,26 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
         await libraryService.addBook({ ...formData, status: 'available' });
       }
       onSave();
+    } catch (error) {
+      console.error('Erro ao salvar livro:', error);
+      setSubmitError('Não foi possível salvar o livro. Tente usar uma imagem menor ou verifique sua conexão.');
     } finally {
       setLoading(false);
     }
   };
 
+  const isDataUrlCover = formData.coverUrl.startsWith('data:image/');
+
   return (
-    <ModalWrapper title={book?.id ? 'Editar Livro' : 'Novo Livro'} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-5">
+    <>
+      <ModalWrapper title={book?.id ? 'Editar Livro' : 'Novo Livro'} onClose={onClose}>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {submitError && (
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 flex items-center gap-2.5 text-xs font-semibold">
+              <AlertCircle size={16} className="shrink-0" />
+              <span>{submitError}</span>
+            </div>
+          )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Título</label>
@@ -365,19 +402,39 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
           </div>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1 flex items-center justify-between">
-            <span>Imagem da Capa</span>
-            <button 
-              type="button"
-              onClick={() => setIsCameraOpen(true)}
-              className="text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1 hover:underline transition-all"
-            >
-              <Camera size={10} />
-              <span>Tirar Foto</span>
-            </button>
-          </label>
-          <div className="flex gap-2">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between pl-1">
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+              Imagem da Capa
+            </label>
+            <div className="flex items-center gap-3">
+              <button 
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-slate-600 dark:text-slate-300 font-bold text-xs flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+              >
+                <Upload size={12} />
+                <span>Enviar Foto</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => setIsCameraOpen(true)}
+                className="text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center gap-1 hover:underline transition-all"
+              >
+                <Camera size={12} />
+                <span>Tirar Foto</span>
+              </button>
+            </div>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          <div className="flex items-center gap-3">
             <div className="w-14 h-20 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden shadow-inner flex items-center justify-center text-slate-400 flex-shrink-0 border border-slate-200 dark:border-slate-700">
               {formData.coverUrl ? (
                 <img src={formData.coverUrl} alt="Capa" className="w-full h-full object-cover" />
@@ -385,29 +442,36 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
                 <RefreshCw size={16} className="opacity-20" />
               )}
             </div>
-            <input 
-              type="url" 
-              placeholder="Cole a URL da capa aqui..."
-              className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors self-center" 
-              value={formData.coverUrl}
-              onChange={e => setFormData({ ...formData, coverUrl: e.target.value })}
-            />
+            {isDataUrlCover ? (
+              <div className="flex-1 flex items-center justify-between gap-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 rounded-xl px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                    Foto da capa capturada
+                  </p>
+                  <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 truncate">
+                    Pronta para salvar no cadastro
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, coverUrl: '' }))}
+                  className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline shrink-0"
+                >
+                  Remover
+                </button>
+              </div>
+            ) : (
+              <input 
+                type="text" 
+                placeholder="Cole a URL da capa ou tire uma foto..."
+                className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/5 font-medium text-sm text-slate-800 dark:text-slate-100 transition-colors self-center" 
+                value={formData.coverUrl}
+                onChange={e => setFormData({ ...formData, coverUrl: e.target.value })}
+              />
+            )}
           </div>
         </div>
 
-        <AnimatePresence>
-          {isCameraOpen && (
-            <CameraCapture 
-              onCapture={(dataUrl) => {
-                // In a real app, you'd upload this to Firebase Storage. 
-                // For this MVP, we use the base64 URL directly.
-                setFormData({ ...formData, coverUrl: dataUrl });
-                setIsCameraOpen(false);
-              }}
-              onClose={() => setIsCameraOpen(false)}
-            />
-          )}
-        </AnimatePresence>
         <div className="space-y-1">
           <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">Descrição</label>
           <textarea 
@@ -426,6 +490,19 @@ const BookModal = ({ book, onClose, onSave }: { book: Book | null, onClose: () =
         </button>
       </form>
     </ModalWrapper>
+
+    <AnimatePresence>
+      {isCameraOpen && (
+        <CameraCapture 
+          onCapture={(dataUrl) => {
+            setFormData(prev => ({ ...prev, coverUrl: dataUrl }));
+            setIsCameraOpen(false);
+          }}
+          onClose={() => setIsCameraOpen(false)}
+        />
+      )}
+    </AnimatePresence>
+    </>
   );
 };
 
@@ -923,15 +1000,26 @@ const LibraryView = () => {
         </div>
         <div className="flex flex-wrap gap-3">
           <button 
+            type="button"
+            onClick={() => exportBooksToSpreadsheet(filteredBooks)}
+            disabled={filteredBooks.length === 0}
+            className="flex items-center justify-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 px-5 py-3.5 rounded-xl font-bold text-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700 disabled:opacity-40 whitespace-nowrap shrink-0"
+          >
+            <Download size={18} className="text-emerald-600 dark:text-emerald-400" />
+            <span>Exportar Planilha</span>
+          </button>
+          <button 
+            type="button"
             onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center justify-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 px-5 py-3.5 rounded-xl font-bold text-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+            className="flex items-center justify-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 px-5 py-3.5 rounded-xl font-bold text-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700 whitespace-nowrap shrink-0"
           >
             <Database size={18} className="text-indigo-600 dark:text-indigo-400" />
             <span>Importar Planilha</span>
           </button>
           <button 
+            type="button"
             onClick={() => { setSelectedBook(null); setIsModalOpen(true); }}
-            className="btn-primary"
+            className="btn-primary whitespace-nowrap shrink-0"
           >
             <Plus size={18} strokeWidth={3} />
             <span>Novo Exemplar</span>
@@ -1157,6 +1245,17 @@ const LoansView = () => {
         <div>
           <h1 className="text-3xl font-display font-bold tracking-tight mb-2 text-slate-800 dark:text-slate-100">Histórico de Empréstimos</h1>
           <p className="text-slate-400 dark:text-slate-500 text-sm font-medium">Veja quem está com seus livros e gerencie devoluções.</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => exportLoansToSpreadsheet(sortedAndFilteredLoans)}
+            disabled={sortedAndFilteredLoans.length === 0}
+            className="flex items-center justify-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 px-5 py-3.5 rounded-xl font-bold text-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700 disabled:opacity-40 whitespace-nowrap shrink-0"
+          >
+            <Download size={18} className="text-emerald-600 dark:text-emerald-400" />
+            <span>Exportar Planilha</span>
+          </button>
         </div>
       </div>
 
@@ -1410,7 +1509,7 @@ const Login = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: (
 
 const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: () => void }) => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'inventory' | 'loans'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'loans' | 'kiosk'>('inventory');
 
   return (
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
@@ -1445,6 +1544,12 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
               label="Empréstimos" 
               active={activeTab === 'loans'} 
               onClick={() => setActiveTab('loans')} 
+            />
+            <SidebarItem 
+              icon={Tablet} 
+              label="Autoatendimento" 
+              active={activeTab === 'kiosk'} 
+              onClick={() => setActiveTab('kiosk')} 
             />
           </nav>
         </div>
@@ -1491,14 +1596,23 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
              <button 
                onClick={() => setActiveTab('inventory')} 
                className={`p-2.5 rounded-xl transition-all ${activeTab === 'inventory' ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}
+               title="Gestão de Acervo"
              >
                <Library size={18} />
              </button>
              <button 
                onClick={() => setActiveTab('loans')} 
                className={`p-2.5 rounded-xl transition-all ${activeTab === 'loans' ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}
+               title="Empréstimos"
              >
                <HandHeart size={18} />
+             </button>
+             <button 
+               onClick={() => setActiveTab('kiosk')} 
+               className={`p-2.5 rounded-xl transition-all ${activeTab === 'kiosk' ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}
+               title="Autoatendimento"
+             >
+               <Tablet size={18} />
              </button>
              <button onClick={() => auth.signOut()} className="p-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 border border-red-100 dark:border-red-900/30">
                <LogOut size={18} />
@@ -1515,7 +1629,13 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3 }}
             >
-              {activeTab === 'inventory' ? <LibraryView /> : <LoansView />}
+              {activeTab === 'inventory' ? (
+                <LibraryView />
+              ) : activeTab === 'loans' ? (
+                <LoansView />
+              ) : (
+                <SelfServiceView />
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

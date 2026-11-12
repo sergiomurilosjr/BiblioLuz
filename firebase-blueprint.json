@@ -16,7 +16,7 @@
         "acquisitionType": { "type": "string", "description": "Forma de Aquisição" },
         "supplier": { "type": "string", "description": "Fornecedor" },
         "status": { "type": "string", "enum": ["available", "loaned"], "description": "Current status" },
-        "coverUrl": { "type": "string", "format": "uri", "description": "URL to book cover image" },
+        "coverUrl": { "type": "string", "format": "uri", "maxLength": 300000, "description": "URL or compressed base64 data URI to book cover image" },
         "description": { "type": "string", "description": "Short summary" },
         "ownerId": { "type": "string", "description": "UID of the user who owns the book inventory" },
         "createdAt": { "type": "string", "format": "date-time" },
@@ -46,6 +46,20 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["bookId", "borrowerName", "loanDate", "borrowerPhone", "status", "ownerId"]
+    },
+    "Borrower": {
+      "title": "Borrower",
+      "description": "Directory of readers who borrow books.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "description": "Reader name" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string", "description": "Reader phone number" },
+        "lastBorrowed": { "type": "string", "format": "date-time" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["name", "phone", "ownerId"]
     }
   },
   "firestore": {
@@ -56,6 +70,10 @@
     "/loans/{loanId}": {
       "schema": "Loan",
       "description": "Collection of loan records."
+    },
+    "/borrowers/{borrowerId}": {
+      "schema": "Borrower",
+      "description": "Collection of registered borrowers."
     }
   }
 }
