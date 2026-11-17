@@ -36,7 +36,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { AuthProvider, useAuth } from './AuthContext';
 import { loginWithGoogle, auth } from './lib/firebase';
-import { libraryService, Book, Loan } from './services/libraryService';
+import { libraryService, Book, Loan, Borrower, normalizePhoneKey } from './services/libraryService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CameraCapture } from './components/CameraCapture';
@@ -1132,6 +1132,7 @@ const LibraryView = () => {
 };
 
 const LoansView = () => {
+  const [loansSubTab, setLoansSubTab] = useState<'loans' | 'borrowers'>('loans');
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -1140,6 +1141,9 @@ const LoansView = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isRemindersModalOpen, setIsRemindersModalOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [confirmDeleteLoanId, setConfirmDeleteLoanId] = useState<string | null>(null);
+  const [deletingLoanId, setDeletingLoanId] = useState<string | null>(null);
+  const [loanFeedback, setLoanFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [dueSoonDays, setDueSoonDays] = useState<number>(() => loadDueSoonDays());
   const [reminderTemplates, setReminderTemplates] = useState<ReminderTemplates>(() =>
@@ -1208,7 +1212,10 @@ const LoansView = () => {
     if (confirm(`Confirmar devolução de "${loan.bookTitle}"?`)) {
       try {
         await libraryService.returnBook(loan.id!, loan.bookId);
-        alert('Livro devolvido com sucesso! O exemplar agora consta como disponível no acervo.');
+        setLoanFeedback({
+          type: 'success',
+          text: `Devolução de "${loan.bookTitle}" registrada! O exemplar agora consta como disponível no acervo.`,
+        });
         loadLoans();
       } catch (error: any) {
         console.error('Erro na devolução:', error);
@@ -1221,8 +1228,30 @@ const LoansView = () => {
         } catch (e) {
           // not json
         }
-        alert(message);
+        setLoanFeedback({ type: 'error', text: message });
       }
+    }
+  };
+
+  const handleDeleteLoan = async (loan: Loan) => {
+    if (!loan.id) return;
+    setDeletingLoanId(loan.id);
+    setLoanFeedback(null);
+    try {
+      await libraryService.deleteLoan(loan.id, loan.bookId, loan.status);
+      setConfirmDeleteLoanId(null);
+      setLoanFeedback({
+        type: 'success',
+        text: `Registro de empréstimo de "${loan.bookTitle}" (${loan.borrowerName}) excluído.`,
+      });
+    } catch (error) {
+      console.error('Erro ao excluir empréstimo:', error);
+      setLoanFeedback({
+        type: 'error',
+        text: 'Não foi possível excluir este registro. Verifique suas permissões.',
+      });
+    } finally {
+      setDeletingLoanId(null);
     }
   };
 
@@ -1282,28 +1311,81 @@ const LoansView = () => {
   );
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col sm:flex-row items-center gap-4">
-        <div className="relative flex-1 group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" size={16} />
-          <input 
-            type="text" 
-            placeholder="Buscar por livro ou destinatário..." 
-            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all text-sm text-slate-600 dark:text-slate-300 placeholder:text-slate-300 dark:placeholder:text-slate-600"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2">
-          <button 
-            onClick={() => setShowHistory(!showHistory)}
-            className={`btn-secondary text-xs px-4 py-3 border ${showHistory ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-400' : ''}`}
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Sub-navigation inside Empréstimos: Registros de Empréstimos vs Cadastros de Leitores */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+        <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+          <button
+            type="button"
+            onClick={() => setLoansSubTab('loans')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
+              loansSubTab === 'loans'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
           >
-            <History size={14} className={showHistory ? 'text-indigo-600 dark:text-indigo-400' : ''} />
-            {showHistory ? 'Ocultar Histórico' : 'Ver Histórico'}
+            <HandHeart size={14} />
+            <span>Registros de Empréstimos</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setLoansSubTab('borrowers')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
+              loansSubTab === 'borrowers'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <UserIcon size={14} />
+            <span>Cadastros de Leitores</span>
           </button>
         </div>
       </div>
+
+      {loansSubTab === 'borrowers' ? (
+        <BorrowersView embedded />
+      ) : (
+        <div className="space-y-10">
+          {loanFeedback && (
+            <div
+              className={`p-4 rounded-xl border text-sm font-medium flex items-center justify-between gap-4 ${
+                loanFeedback.type === 'success'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300'
+              }`}
+            >
+              <span>{loanFeedback.text}</span>
+              <button
+                type="button"
+                onClick={() => setLoanFeedback(null)}
+                className="text-xs font-semibold hover:underline shrink-0"
+              >
+                Fechar
+              </button>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="relative flex-1 group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" size={16} />
+              <input 
+                type="text" 
+                placeholder="Buscar por livro ou destinatário..." 
+                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all text-sm text-slate-600 dark:text-slate-300 placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setShowHistory(!showHistory)}
+                className={`btn-secondary text-xs px-4 py-3 border ${showHistory ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-400' : ''}`}
+              >
+                <History size={14} className={showHistory ? 'text-indigo-600 dark:text-indigo-400' : ''} />
+                {showHistory ? 'Ocultar Histórico' : 'Ver Histórico'}
+              </button>
+            </div>
+          </div>
 
       {(overdueCount > 0 || dueSoonCount > 0) && (
         <motion.div 
@@ -1556,12 +1638,42 @@ const LoansView = () => {
                           </button>
                         )}
                         <button 
+                          type="button"
                           onClick={() => { setSelectedLoan(loan); setIsEditModalOpen(true); }}
                           className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
-                          title="Editar Registro"
+                          title="Editar Empréstimo"
                         >
                           <Edit size={16} />
                         </button>
+                        {confirmDeleteLoanId === loan.id ? (
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={deletingLoanId === loan.id}
+                              onClick={() => handleDeleteLoan(loan)}
+                              className="px-2.5 py-1 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold transition-colors disabled:opacity-50 whitespace-nowrap"
+                            >
+                              {deletingLoanId === loan.id ? 'Excluindo...' : 'Confirmar'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={deletingLoanId === loan.id}
+                              onClick={() => setConfirmDeleteLoanId(null)}
+                              className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                            >
+                              Não
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteLoanId(loan.id || null)}
+                            className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                            title="Excluir Empréstimo"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1604,6 +1716,380 @@ const LoansView = () => {
             onSaveTemplates={handleSaveTemplates}
             onMarkSent={handleMarkReminderSent}
             onClose={() => setIsRemindersModalOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const BorrowerModal = ({
+  borrower,
+  onClose,
+  onSave,
+}: {
+  borrower: Borrower;
+  onClose: () => void;
+  onSave: () => void;
+}) => {
+  const [name, setName] = useState(borrower.name || '');
+  const [phone, setPhone] = useState(borrower.phone || '');
+  const [email, setEmail] = useState(borrower.email || '');
+  const [verified, setVerified] = useState(Boolean(borrower.verified));
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!borrower.id) return;
+    if (!name.trim() || !phone.trim()) {
+      setErrorMsg('Nome e telefone são obrigatórios.');
+      return;
+    }
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      await libraryService.updateBorrower(borrower.id, {
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email.trim() || undefined,
+        verified,
+      });
+      onSave();
+    } catch (err) {
+      console.error('Erro ao atualizar cadastro:', err);
+      setErrorMsg('Não foi possível atualizar o cadastro.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <ModalWrapper title="Editar Cadastro do Leitor" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {errorMsg && (
+          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-xs font-semibold text-rose-700 dark:text-rose-300">
+            {errorMsg}
+          </div>
+        )}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+            Nome Completo *
+          </label>
+          <input
+            required
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+            Telefone / WhatsApp *
+          </label>
+          <input
+            required
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+            E-mail (opcional)
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          />
+        </div>
+        <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={verified}
+            onChange={(e) => setVerified(e.target.checked)}
+            className="w-4 h-4 accent-emerald-600 rounded"
+          />
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+            WhatsApp verificado no autoatendimento
+          </span>
+        </label>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full btn-primary py-3.5 text-sm disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="animate-spin" size={18} /> : 'Salvar Alterações'}
+        </button>
+      </form>
+    </ModalWrapper>
+  );
+};
+
+const BorrowersView = ({ embedded = false }: { embedded?: boolean }) => {
+  const [borrowers, setBorrowers] = useState<Borrower[]>([]);
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [editingBorrower, setEditingBorrower] = useState<Borrower | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    const unsubBorrowers = libraryService.subscribeBorrowers(
+      (data) => {
+        setBorrowers(data);
+        setLoading(false);
+      },
+      () => {
+        setLoading(false);
+      }
+    );
+    const unsubLoans = libraryService.subscribeLoans((data) => {
+      setLoans(data);
+    });
+    return () => {
+      unsubBorrowers();
+      unsubLoans();
+    };
+  }, []);
+
+  const activeLoanCountByPhone = useMemo(() => {
+    const counts = new Map<string, number>();
+    loans.forEach((l) => {
+      if (l.status === 'returned' || l.status === 'lost') return;
+      const key = l.borrowerPhoneNormalized || normalizePhoneKey(l.borrowerPhone);
+      if (!key) return;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return counts;
+  }, [loans]);
+
+  const filteredBorrowers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const qDigits = search.replace(/\D/g, '');
+    if (!q) return borrowers;
+    return borrowers.filter((b) => {
+      const phoneDigits = (b.phone || '').replace(/\D/g, '');
+      return (
+        (b.name || '').toLowerCase().includes(q) ||
+        (b.phone || '').toLowerCase().includes(q) ||
+        (qDigits.length >= 3 && phoneDigits.includes(qDigits))
+      );
+    });
+  }, [borrowers, search]);
+
+  const handleDeleteBorrower = async (borrower: Borrower) => {
+    if (!borrower.id) return;
+    setDeletingId(borrower.id);
+    setFeedback(null);
+    try {
+      await libraryService.deleteBorrower(borrower.id);
+      setConfirmDeleteId(null);
+      setFeedback({
+        type: 'success',
+        text: `Cadastro de ${borrower.name} (${borrower.phone}) excluído com sucesso.`,
+      });
+    } catch (err) {
+      console.error('Erro ao excluir leitor:', err);
+      setFeedback({
+        type: 'error',
+        text: 'Não foi possível excluir este cadastro. Verifique se você está autenticado como administrador.',
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  if (loading && borrowers.length === 0) {
+    return (
+      <div className="h-[40vh] flex items-center justify-center">
+        <Loader2 className="animate-spin text-slate-200" size={40} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          {embedded ? (
+            <h2 className="text-2xl font-display font-bold tracking-tight mb-1 text-slate-800 dark:text-slate-100">
+              Cadastros de Leitores
+            </h2>
+          ) : (
+            <h1 className="text-3xl font-display font-bold tracking-tight mb-2 text-slate-800 dark:text-slate-100">
+              Leitores Cadastrados
+            </h1>
+          )}
+          <p className="text-slate-400 dark:text-slate-500 text-sm font-medium">
+            Edite ou exclua os cadastros vinculados ao telefone para empréstimos e autoatendimento.
+          </p>
+        </div>
+        <div className="text-sm font-semibold text-slate-500 dark:text-slate-400 tabular-nums">
+          {borrowers.length} {borrowers.length === 1 ? 'leitor cadastrado' : 'leitores cadastrados'}
+        </div>
+      </div>
+
+      {feedback && (
+        <div
+          className={`p-4 rounded-xl border text-sm font-medium flex items-center justify-between gap-4 ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-300'
+              : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300'
+          }`}
+        >
+          <span>{feedback.text}</span>
+          <button
+            type="button"
+            onClick={() => setFeedback(null)}
+            className="text-xs font-semibold hover:underline shrink-0"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
+
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+        <input
+          type="text"
+          placeholder="Buscar por nome ou telefone (ex: 48996478449)..."
+          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left font-sans">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                  Leitor
+                </th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                  Telefone / WhatsApp
+                </th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                  Empréstimos Ativos
+                </th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                  Última Retirada
+                </th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 text-right">
+                  Ações
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filteredBorrowers.map((borrower) => {
+                const phoneKey = borrower.phoneNormalized || normalizePhoneKey(borrower.phone);
+                const activeCount = phoneKey ? activeLoanCountByPhone.get(phoneKey) || 0 : 0;
+                const lastBorrowedDate = parseLoanDate(borrower.lastBorrowed);
+                const isConfirming = confirmDeleteId === borrower.id;
+                const isDeleting = deletingId === borrower.id;
+
+                return (
+                  <tr key={borrower.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="px-6 py-5">
+                      <div className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                        {borrower.name}
+                      </div>
+                      {borrower.verified && (
+                        <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          WhatsApp verificado
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-5 text-sm font-medium text-slate-600 dark:text-slate-300 tabular-nums">
+                      {borrower.phone}
+                    </td>
+                    <td className="px-6 py-5 text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                      {activeCount}
+                    </td>
+                    <td className="px-6 py-5 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                      {lastBorrowedDate ? format(lastBorrowedDate, 'dd/MM/yyyy', { locale: ptBR }) : '—'}
+                    </td>
+                    <td className="px-6 py-5 text-right">
+                      {isConfirming ? (
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={isDeleting}
+                            onClick={() => handleDeleteBorrower(borrower)}
+                            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                          >
+                            {isDeleting ? 'Excluindo...' : 'Confirmar exclusão'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isDeleting}
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingBorrower(borrower)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors"
+                            title="Editar cadastro"
+                          >
+                            <Edit size={14} />
+                            <span>Editar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(borrower.id || null)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                            title="Excluir cadastro"
+                          >
+                            <Trash2 size={14} />
+                            <span>Excluir</span>
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredBorrowers.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-16 text-center text-sm text-slate-400 dark:text-slate-500">
+                    Nenhum leitor cadastrado encontrado.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {editingBorrower && (
+          <BorrowerModal
+            borrower={editingBorrower}
+            onClose={() => setEditingBorrower(null)}
+            onSave={() => {
+              setEditingBorrower(null);
+              setFeedback({
+                type: 'success',
+                text: 'Cadastro do leitor atualizado com sucesso.',
+              });
+            }}
           />
         )}
       </AnimatePresence>
@@ -1702,7 +2188,7 @@ const Login = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: (
 
 const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: () => void }) => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'inventory' | 'loans'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'loans' | 'borrowers'>('inventory');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
@@ -1722,7 +2208,7 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
     }
   };
 
-  const selectMobileTab = (tab: 'inventory' | 'loans') => {
+  const selectMobileTab = (tab: 'inventory' | 'loans' | 'borrowers') => {
     setActiveTab(tab);
     setMobileMenuOpen(false);
   };
@@ -1760,6 +2246,12 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
               label="Empréstimos" 
               active={activeTab === 'loans'} 
               onClick={() => setActiveTab('loans')} 
+            />
+            <SidebarItem 
+              icon={UserIcon} 
+              label="Leitores" 
+              active={activeTab === 'borrowers'} 
+              onClick={() => setActiveTab('borrowers')} 
             />
           </nav>
 
@@ -1878,6 +2370,21 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
                   <HandHeart size={17} />
                   <span>Empréstimos</span>
                 </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    selectMobileTab('borrowers');
+                  }}
+                  className={`w-full px-4 py-3 text-left text-sm font-medium flex items-center gap-3 transition-colors ${
+                    activeTab === 'borrowers'
+                      ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 font-bold'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <UserIcon size={17} />
+                  <span>Leitores</span>
+                </button>
 
                 <div className="my-1.5 border-t border-slate-100 dark:border-slate-800" />
 
@@ -1957,8 +2464,10 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
             >
               {activeTab === 'inventory' ? (
                 <LibraryView />
-              ) : (
+              ) : activeTab === 'loans' ? (
                 <LoansView />
+              ) : (
+                <BorrowersView />
               )}
             </motion.div>
           </AnimatePresence>

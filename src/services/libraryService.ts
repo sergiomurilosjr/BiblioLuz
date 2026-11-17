@@ -178,6 +178,32 @@ export const libraryService = {
     });
   },
 
+  async deleteBorrower(borrowerId: string) {
+    try {
+      await deleteDoc(doc(db, BORROWERS_COL, borrowerId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `${BORROWERS_COL}/${borrowerId}`);
+    }
+  },
+
+  async updateBorrower(borrowerId: string, borrowerData: Partial<Borrower>) {
+    try {
+      const phoneNormalized = borrowerData.phone
+        ? normalizePhoneKey(borrowerData.phone)
+        : borrowerData.phoneNormalized;
+      const cleanBorrower = stripUndefined({
+        ...borrowerData,
+        phoneNormalized: phoneNormalized || undefined,
+      });
+      await updateDoc(doc(db, BORROWERS_COL, borrowerId), {
+        ...cleanBorrower,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `${BORROWERS_COL}/${borrowerId}`);
+    }
+  },
+
   async bulkAddLoans(loansData: Omit<Loan, 'id' | 'ownerId' | 'updatedAt'>[]) {
     const userId = auth.currentUser?.uid;
     if (!userId) throw new Error('User not authenticated');
@@ -464,6 +490,25 @@ export const libraryService = {
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `${LOANS_COL}/${loanId}`);
+    }
+  },
+
+  async deleteLoan(loanId: string, bookId?: string, status?: Loan['status']) {
+    try {
+      await deleteDoc(doc(db, LOANS_COL, loanId));
+      if (
+        (status === 'active' || status === 'overdue') &&
+        bookId &&
+        bookId !== 'manual-import'
+      ) {
+        try {
+          await this.updateBook(bookId, { status: 'available' });
+        } catch (bookError) {
+          console.warn('Could not restore book status on loan delete:', bookId);
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `${LOANS_COL}/${loanId}`);
     }
   },
 

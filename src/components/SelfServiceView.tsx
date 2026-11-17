@@ -412,12 +412,7 @@ export const SelfServiceView = ({
         return bKey === phoneKey;
       });
 
-      const hasLegacyLoanWithPhone = latestLoans.some((l) => {
-        const lKey = l.borrowerPhoneNormalized || normalizePhoneKey(l.borrowerPhone);
-        return lKey === phoneKey;
-      });
-
-      if (existingBorrower || hasLegacyLoanWithPhone) {
+      if (existingBorrower) {
         // Already registered in the system -> check limits directly
         proceedAfterRegistration(phoneKey, latestLoans);
       } else {
