@@ -36,13 +36,24 @@
         "borrowerName": { "type": "string", "description": "Name of the person borrowing the book" },
         "borrowerEmail": { "type": "string", "format": "email" },
         "borrowerPhone": { "type": "string", "description": "Phone number" },
+        "borrowerPhoneNormalized": { "type": "string", "maxLength": 50, "description": "Normalized WhatsApp digits" },
         "responsible": { "type": "string", "description": "Person responsible for the loan" },
         "notes": { "type": "string", "description": "Observations" },
         "loanDate": { "type": "string", "format": "date-time" },
         "dueDate": { "type": "string", "format": "date-time" },
         "returnDate": { "type": "string", "format": "date-time" },
         "status": { "type": "string", "enum": ["active", "returned", "overdue", "lost"] },
-        "ownerId": { "type": "string", "description": "UID of the library owner" },
+        "lastReminderAt": { "type": "string", "format": "date-time", "description": "Timestamp of the last WhatsApp reminder sent" },
+        "reminderCount": { "type": "integer", "description": "Number of WhatsApp reminders sent" },
+        "agreedToTerms": { "type": "boolean", "description": "Whether the borrower agreed to the 30-day term and WhatsApp reminder" },
+        "agreedAt": { "type": "string", "format": "date-time" },
+        "reminderScheduledFor": { "type": "string", "format": "date-time", "description": "Scheduled date for the 3-days-before-due WhatsApp reminder" },
+        "reminderStatus": { "type": "string", "enum": ["scheduled", "sent", "cancelled", "none"] },
+        "extensionCount": { "type": "integer", "description": "Number of +15 day extensions granted" },
+        "lastExtensionAt": { "type": "string", "format": "date-time" },
+        "returnClaimedAt": { "type": "string", "format": "date-time", "description": "Timestamp when reader clicked Já devolvi" },
+        "returnClaimStatus": { "type": "string", "enum": ["none", "pending_verification", "resolved"] },
+        "ownerId": { "type": "string", "description": "UID of the library owner or self-service" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["bookId", "borrowerName", "loanDate", "borrowerPhone", "status", "ownerId"]
@@ -56,8 +67,12 @@
         "name": { "type": "string", "description": "Reader name" },
         "email": { "type": "string", "format": "email" },
         "phone": { "type": "string", "description": "Reader phone number" },
+        "phoneNormalized": { "type": "string", "maxLength": 50, "description": "Normalized WhatsApp phone digits" },
+        "verified": { "type": "boolean", "description": "Whether the WhatsApp phone number was verified" },
+        "verifiedAt": { "type": "string", "format": "date-time" },
         "lastBorrowed": { "type": "string", "format": "date-time" },
-        "ownerId": { "type": "string" }
+        "ownerId": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "phone", "ownerId"]
     }

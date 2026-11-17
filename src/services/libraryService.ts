@@ -4,15 +4,19 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
+  getDoc,
   query, 
   where, 
   getDocs, 
   orderBy, 
+  onSnapshot,
   serverTimestamp,
   Timestamp,
   writeBatch
 } from 'firebase/firestore';
+import { addDays } from 'date-fns';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { normalizeWhatsAppPhone, parseLoanDate } from '../lib/whatsappReminder';
 import axios from 'axios';
 
 export interface Book {
@@ -42,12 +46,23 @@ export interface Loan {
   borrowerName: string;
   borrowerEmail?: string;
   borrowerPhone: string;
+  borrowerPhoneNormalized?: string;
   responsible?: string;
   notes?: string;
   loanDate: any;
   dueDate?: any;
   returnDate?: any;
   status: 'active' | 'returned' | 'overdue' | 'lost';
+  lastReminderAt?: any;
+  reminderCount?: number;
+  agreedToTerms?: boolean;
+  agreedAt?: any;
+  reminderScheduledFor?: any;
+  reminderStatus?: 'scheduled' | 'sent' | 'cancelled' | 'none';
+  extensionCount?: number;
+  lastExtensionAt?: any;
+  returnClaimedAt?: any;
+  returnClaimStatus?: 'none' | 'pending_verification' | 'resolved';
   ownerId: string;
   updatedAt?: any;
 }
@@ -57,8 +72,12 @@ export interface Borrower {
   name: string;
   email?: string;
   phone: string;
+  phoneNormalized?: string;
+  verified?: boolean;
+  verifiedAt?: any;
   lastBorrowed?: any;
   ownerId: string;
+  updatedAt?: any;
 }
 
 const BOOKS_COL = 'books';
@@ -75,12 +94,16 @@ function stripUndefined<T extends Record<string, any>>(data: T): Partial<T> {
   return clean as Partial<T>;
 }
 
+export function normalizePhoneKey(phone?: string): string {
+  if (!phone) return '';
+  const wa = normalizeWhatsAppPhone(phone);
+  if (wa) return wa;
+  return phone.replace(/\D/g, '').replace(/^0+/, '');
+}
+
 export const libraryService = {
   // Borrowers
   async getBorrowers() {
-    const userId = auth.currentUser?.uid;
-    if (!userId) throw new Error('User not authenticated');
-    
     try {
       const q = query(
         collection(db, BORROWERS_COL),
@@ -95,38 +118,64 @@ export const libraryService = {
   },
 
   async saveBorrower(borrowerData: Omit<Borrower, 'id' | 'ownerId'>) {
-    const userId = auth.currentUser?.uid;
-    if (!userId) throw new Error('User not authenticated');
+    const userId = auth.currentUser?.uid || 'self-service';
 
     try {
-      const cleanBorrower = stripUndefined(borrowerData);
-      // Check if borrower already exists by phone (unique enough for this app)
-      const q = query(
-        collection(db, BORROWERS_COL),
-        where('phone', '==', borrowerData.phone)
-      );
-      const snapshot = await getDocs(q);
-      
-      if (!snapshot.empty) {
-        // Update existing
-        const borrowerDoc = snapshot.docs[0];
-        await updateDoc(doc(db, BORROWERS_COL, borrowerDoc.id), {
+      const phoneNormalized = normalizePhoneKey(borrowerData.phone);
+      const cleanBorrower = stripUndefined({
+        ...borrowerData,
+        phoneNormalized: phoneNormalized || undefined,
+      });
+
+      // Match existing borrower by normalized phone or raw phone
+      let existingDocId: string | null = null;
+      if (phoneNormalized) {
+        const allSnapshot = await getDocs(collection(db, BORROWERS_COL));
+        const match = allSnapshot.docs.find((d) => {
+          const data = d.data() as Borrower;
+          const existingKey = data.phoneNormalized || normalizePhoneKey(data.phone);
+          return existingKey === phoneNormalized;
+        });
+        if (match) existingDocId = match.id;
+      } else {
+        const q = query(
+          collection(db, BORROWERS_COL),
+          where('phone', '==', borrowerData.phone)
+        );
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) existingDocId = snapshot.docs[0].id;
+      }
+
+      if (existingDocId) {
+        await updateDoc(doc(db, BORROWERS_COL, existingDocId), {
           ...cleanBorrower,
           lastBorrowed: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         });
-        return borrowerDoc.id;
+        return existingDocId;
       } else {
-        // Create new
         const docRef = await addDoc(collection(db, BORROWERS_COL), {
           ...cleanBorrower,
           ownerId: userId,
           lastBorrowed: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         });
         return docRef.id;
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, BORROWERS_COL);
     }
+  },
+
+  async registerVerifiedBorrower(name: string, phone: string) {
+    const phoneNormalized = normalizePhoneKey(phone);
+    return this.saveBorrower({
+      name: name.trim(),
+      phone: phone.trim(),
+      phoneNormalized: phoneNormalized || undefined,
+      verified: true,
+      verifiedAt: serverTimestamp(),
+    });
   },
 
   async bulkAddLoans(loansData: Omit<Loan, 'id' | 'ownerId' | 'updatedAt'>[]) {
@@ -164,9 +213,6 @@ export const libraryService = {
   },
   // Books
   async getBooks() {
-    const userId = auth.currentUser?.uid;
-    if (!userId) throw new Error('User not authenticated');
-    
     try {
       const q = query(
         collection(db, BOOKS_COL)
@@ -274,9 +320,6 @@ export const libraryService = {
 
   // Loans
   async getLoans() {
-    const userId = auth.currentUser?.uid;
-    if (!userId) throw new Error('User not authenticated');
-
     try {
       const q = query(
         collection(db, LOANS_COL)
@@ -289,20 +332,45 @@ export const libraryService = {
     }
   },
 
+  async getLoanById(loanId: string): Promise<Loan | null> {
+    try {
+      const snap = await getDoc(doc(db, LOANS_COL, loanId));
+      if (!snap.exists()) return null;
+      return { id: snap.id, ...snap.data() } as Loan;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `${LOANS_COL}/${loanId}`);
+      return null;
+    }
+  },
+
   async createLoan(loanData: Omit<Loan, 'id' | 'ownerId' | 'status'>) {
-    const userId = auth.currentUser?.uid;
-    if (!userId) throw new Error('User not authenticated');
+    const userId = auth.currentUser?.uid || 'self-service';
 
     try {
+      const phoneNormalized = normalizePhoneKey(loanData.borrowerPhone);
+
       // 1. Save/Update borrower info
       await this.saveBorrower({
         name: loanData.borrowerName,
         email: loanData.borrowerEmail,
-        phone: loanData.borrowerPhone
+        phone: loanData.borrowerPhone,
+        phoneNormalized: phoneNormalized || undefined,
       });
 
+      // Compute scheduled reminder 3 days before due date
+      let reminderScheduledFor = loanData.reminderScheduledFor;
+      if (!reminderScheduledFor && loanData.dueDate instanceof Date && !isNaN(loanData.dueDate.getTime())) {
+        reminderScheduledFor = Timestamp.fromDate(addDays(loanData.dueDate, -3));
+      }
+
       // 2. Create the loan
-      const cleanLoan = stripUndefined(loanData);
+      const cleanLoan = stripUndefined({
+        ...loanData,
+        borrowerPhoneNormalized: phoneNormalized || undefined,
+        reminderScheduledFor,
+        reminderStatus: loanData.reminderStatus || (reminderScheduledFor ? 'scheduled' : 'none'),
+        agreedAt: loanData.agreedToTerms ? serverTimestamp() : undefined,
+      });
       const loanRef = await addDoc(collection(db, LOANS_COL), {
         ...cleanLoan,
         ownerId: userId,
@@ -322,11 +390,13 @@ export const libraryService = {
 
   async returnBook(loanId: string, bookId: string) {
     try {
-      // 1. Update loan status
+      // 1. Update loan status and cancel any pending scheduled reminder
       const loanRef = doc(db, LOANS_COL, loanId);
       await updateDoc(loanRef, {
         status: 'returned',
         returnDate: serverTimestamp(),
+        reminderStatus: 'cancelled',
+        returnClaimStatus: 'resolved',
         updatedAt: serverTimestamp(),
       });
 
@@ -343,12 +413,67 @@ export const libraryService = {
     }
   },
 
+  async extendLoanBy15Days(loan: Loan): Promise<Date> {
+    if (!loan.id) throw new Error('Empréstimo inválido.');
+    try {
+      const now = new Date();
+      const currentDue = parseLoanDate(loan.dueDate);
+      const extendedFromDue = currentDue ? addDays(currentDue, 15) : addDays(now, 15);
+      const minNewDue = addDays(now, 15);
+      const newDueDate = extendedFromDue.getTime() < minNewDue.getTime() ? minNewDue : extendedFromDue;
+      const newReminderDate = addDays(newDueDate, -3);
+
+      const loanRef = doc(db, LOANS_COL, loan.id);
+      await updateDoc(loanRef, {
+        dueDate: Timestamp.fromDate(newDueDate),
+        status: 'active',
+        reminderScheduledFor: Timestamp.fromDate(newReminderDate),
+        reminderStatus: 'scheduled',
+        extensionCount: (loan.extensionCount || 0) + 1,
+        lastExtensionAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      return newDueDate;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `${LOANS_COL}/${loan.id}`);
+      throw error;
+    }
+  },
+
+  async reportLoanAlreadyReturned(loanId: string) {
+    try {
+      const loanRef = doc(db, LOANS_COL, loanId);
+      await updateDoc(loanRef, {
+        returnClaimedAt: serverTimestamp(),
+        returnClaimStatus: 'pending_verification',
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `${LOANS_COL}/${loanId}`);
+    }
+  },
+
   async updateLoan(loanId: string, loanData: Partial<Loan>) {
     try {
       const cleanLoan = stripUndefined(loanData);
       const loanRef = doc(db, LOANS_COL, loanId);
       await updateDoc(loanRef, {
         ...cleanLoan,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `${LOANS_COL}/${loanId}`);
+    }
+  },
+
+  async markLoanReminderSent(loanId: string, currentCount = 0) {
+    try {
+      const loanRef = doc(db, LOANS_COL, loanId);
+      await updateDoc(loanRef, {
+        lastReminderAt: serverTimestamp(),
+        reminderCount: (currentCount || 0) + 1,
+        reminderStatus: 'sent',
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -382,5 +507,56 @@ export const libraryService = {
     } catch (error) {
        // already handled in updateLoan
     }
+  },
+
+  subscribeBooks(onData: (books: Book[]) => void, onError?: (error: unknown) => void) {
+    const q = query(collection(db, BOOKS_COL));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        onData(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Book)));
+      },
+      (error) => {
+        try {
+          handleFirestoreError(error, OperationType.LIST, BOOKS_COL);
+        } catch (wrappedError) {
+          onError?.(wrappedError);
+        }
+      }
+    );
+  },
+
+  subscribeLoans(onData: (loans: Loan[]) => void, onError?: (error: unknown) => void) {
+    const q = query(collection(db, LOANS_COL));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        onData(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Loan)));
+      },
+      (error) => {
+        try {
+          handleFirestoreError(error, OperationType.LIST, LOANS_COL);
+        } catch (wrappedError) {
+          onError?.(wrappedError);
+        }
+      }
+    );
+  },
+
+  subscribeBorrowers(onData: (borrowers: Borrower[]) => void, onError?: (error: unknown) => void) {
+    const q = query(collection(db, BORROWERS_COL), orderBy('name', 'asc'));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        onData(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Borrower)));
+      },
+      (error) => {
+        try {
+          handleFirestoreError(error, OperationType.LIST, BORROWERS_COL);
+        } catch (wrappedError) {
+          onError?.(wrappedError);
+        }
+      }
+    );
   }
 };

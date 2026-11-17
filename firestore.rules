@@ -8,13 +8,12 @@ service cloud.firestore {
 
     // --- Helpers ---
     function isSignedIn() { return request.auth != null; }
-    function isOwner(data) { return isSignedIn(); } // Changed to allow all signed-in users to access shared library
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
-    
+
     // --- Validation Blueprints ---
-    
+
     function isValidBook(data) {
       return data.title is string && data.title.size() <= 2000
           && data.author is string && data.author.size() <= 1000
@@ -38,52 +37,104 @@ service cloud.firestore {
           && (data.loanDate is timestamp || data.loanDate == request.time)
           && (data.get('cdeIndex', '') is string && data.get('cdeIndex', '').size() <= 500)
           && (data.get('borrowerPhone', '') is string && data.get('borrowerPhone', '').size() <= 200)
+          && (data.get('borrowerPhoneNormalized', '') is string && data.get('borrowerPhoneNormalized', '').size() <= 50)
           && (data.get('borrowerEmail', '') is string && data.get('borrowerEmail', '').size() <= 500)
           && (data.get('responsible', '') is string && data.get('responsible', '').size() <= 500)
           && (data.get('notes', '') is string && data.get('notes', '').size() <= 20000)
           && (data.get('dueDate', null) == null || data.dueDate is timestamp)
-          && (data.get('returnDate', null) == null || data.returnDate is timestamp);
+          && (data.get('returnDate', null) == null || data.returnDate is timestamp)
+          && (data.get('lastReminderAt', null) == null || data.lastReminderAt is timestamp)
+          && (data.get('reminderCount', 0) is int && data.get('reminderCount', 0) >= 0 && data.get('reminderCount', 0) <= 10000)
+          && (data.get('agreedToTerms', false) is bool)
+          && (data.get('agreedAt', null) == null || data.agreedAt is timestamp)
+          && (data.get('reminderScheduledFor', null) == null || data.reminderScheduledFor is timestamp)
+          && (data.get('reminderStatus', 'none') in ['scheduled', 'sent', 'cancelled', 'none'])
+          && (data.get('extensionCount', 0) is int && data.get('extensionCount', 0) >= 0 && data.get('extensionCount', 0) <= 100)
+          && (data.get('lastExtensionAt', null) == null || data.lastExtensionAt is timestamp)
+          && (data.get('returnClaimedAt', null) == null || data.returnClaimedAt is timestamp)
+          && (data.get('returnClaimStatus', 'none') in ['none', 'pending_verification', 'resolved']);
     }
 
     function isValidBorrower(data) {
       return data.name is string && data.name.size() >= 1 && data.name.size() <= 1000
           && data.phone is string && data.phone.size() >= 1 && data.phone.size() <= 200
+          && (data.get('phoneNormalized', '') is string && data.get('phoneNormalized', '').size() <= 50)
           && (data.get('email', '') is string && data.get('email', '').size() <= 500)
-          && (data.get('lastBorrowed', null) == null || data.lastBorrowed is timestamp);
+          && (data.get('verified', false) is bool)
+          && (data.get('verifiedAt', null) == null || data.verifiedAt is timestamp)
+          && (data.get('lastBorrowed', null) == null || data.lastBorrowed is timestamp)
+          && (data.get('updatedAt', null) == null || data.updatedAt is timestamp)
+          && (data.get('ownerId', '') is string && data.get('ownerId', '').size() <= 128);
     }
 
     // --- Collections ---
     match /books/{document} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && isValidId(document) && isValidBook(incoming())
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(document) && isValidBook(incoming())
                     && (incoming().get('createdAt', request.time) == request.time)
                     && (incoming().get('updatedAt', request.time) == request.time);
-      
-      allow update: if request.auth != null && isValidBook(incoming()) 
-                    && (incoming().get('createdAt', existing().get('createdAt', request.time)) == existing().get('createdAt', request.time))
-                    && (incoming().get('updatedAt', request.time) == request.time);
 
-      allow delete: if request.auth != null;
+      allow update: if isValidBook(incoming())
+                    && (incoming().get('createdAt', existing().get('createdAt', request.time)) == existing().get('createdAt', request.time))
+                    && (incoming().get('updatedAt', request.time) == request.time)
+                    && (
+                      isSignedIn() ||
+                      incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+                    );
+
+      allow delete: if isSignedIn();
     }
 
     match /loans/{document} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && isValidId(document) && isValidLoan(incoming())
+      allow read: if true;
+      allow create: if isValidId(document) && isValidLoan(incoming())
                     && (incoming().get('createdAt', request.time) == request.time)
-                    && (incoming().get('updatedAt', request.time) == request.time);
-      
-      allow update: if request.auth != null && isValidLoan(incoming())
+                    && (incoming().get('updatedAt', request.time) == request.time)
+                    && (
+                      isSignedIn() || (
+                        incoming().ownerId == 'self-service'
+                        && incoming().status == 'active'
+                        && incoming().get('agreedToTerms', false) == true
+                      )
+                    );
+
+      allow update: if isValidLoan(incoming())
                     && (incoming().get('createdAt', existing().get('createdAt', request.time)) == existing().get('createdAt', request.time))
-                    && (incoming().get('updatedAt', request.time) == request.time);
-      
-      allow delete: if request.auth != null;
+                    && (incoming().get('updatedAt', request.time) == request.time)
+                    && (
+                      isSignedIn() ||
+                      (
+                        existing().status != 'returned'
+                        && incoming().status == 'returned'
+                        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'returnDate', 'reminderStatus', 'returnClaimStatus', 'updatedAt'])
+                      ) ||
+                      (
+                        existing().status != 'returned'
+                        && existing().status != 'lost'
+                        && incoming().status == 'active'
+                        && incoming().dueDate is timestamp
+                        && incoming().diff(existing()).affectedKeys().hasOnly(['dueDate', 'status', 'reminderScheduledFor', 'reminderStatus', 'extensionCount', 'lastExtensionAt', 'notes', 'updatedAt'])
+                      ) ||
+                      (
+                        existing().status != 'returned'
+                        && incoming().returnClaimStatus == 'pending_verification'
+                        && incoming().diff(existing()).affectedKeys().hasOnly(['returnClaimedAt', 'returnClaimStatus', 'notes', 'updatedAt'])
+                      )
+                    );
+
+      allow delete: if isSignedIn();
     }
 
     match /borrowers/{document} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && isValidId(document) && isValidBorrower(incoming());
-      allow update: if request.auth != null && isValidBorrower(incoming());
-      allow delete: if request.auth != null;
+      allow read: if true;
+      allow create: if isValidId(document) && isValidBorrower(incoming())
+                    && (isSignedIn() || incoming().ownerId == 'self-service');
+      allow update: if isValidBorrower(incoming())
+                    && (
+                      isSignedIn() ||
+                      incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'phoneNormalized', 'verified', 'verifiedAt', 'lastBorrowed', 'updatedAt'])
+                    );
+      allow delete: if isSignedIn();
     }
   }
 }

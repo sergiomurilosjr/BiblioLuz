@@ -27,7 +27,11 @@ import {
   Upload,
   AlertCircle,
   Download,
-  Menu
+  Menu,
+  MessageCircle,
+  ExternalLink,
+  Link2,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -36,9 +40,23 @@ import { libraryService, Book, Loan } from './services/libraryService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CameraCapture } from './components/CameraCapture';
-import { SelfServiceView } from './components/SelfServiceView';
+import { WhatsAppRemindersModal } from './components/WhatsAppRemindersModal';
 import { compressCoverImage } from './lib/imageUtils';
 import { exportBooksToSpreadsheet, exportLoansToSpreadsheet } from './lib/exportSpreadsheet';
+import {
+  ReminderTemplates,
+  classifyLoanUrgency,
+  normalizeWhatsAppPhone,
+  buildReminderMessage,
+  buildWhatsAppUrl,
+  loadReminderTemplates,
+  saveReminderTemplates,
+  loadDueSoonDays,
+  saveDueSoonDays,
+  loadPublicOrigin,
+  wasRemindedToday,
+  parseLoanDate,
+} from './lib/whatsappReminder';
 
 // --- Theme ---
 
@@ -957,7 +975,17 @@ const LibraryView = () => {
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
 
   useEffect(() => {
-    loadBooks();
+    setLoading(true);
+    const unsubscribe = libraryService.subscribeBooks(
+      (data) => {
+        setBooks(data);
+        setLoading(false);
+      },
+      () => {
+        setLoading(false);
+      }
+    );
+    return unsubscribe;
   }, []);
 
   const loadBooks = async () => {
@@ -1110,11 +1138,26 @@ const LoansView = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isRemindersModalOpen, setIsRemindersModalOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [dueSoonDays, setDueSoonDays] = useState<number>(() => loadDueSoonDays());
+  const [reminderTemplates, setReminderTemplates] = useState<ReminderTemplates>(() =>
+    loadReminderTemplates()
+  );
 
   useEffect(() => {
-    loadLoans();
+    setLoading(true);
+    const unsubscribe = libraryService.subscribeLoans(
+      (data) => {
+        setLoans(data);
+        setLoading(false);
+      },
+      () => {
+        setLoading(false);
+      }
+    );
+    return unsubscribe;
   }, []);
 
   const loadLoans = async () => {
@@ -1183,18 +1226,54 @@ const LoansView = () => {
     }
   };
 
-  const overdueCount = useMemo(() => {
-    return loans.filter(l => {
-      if (l.status !== 'active') return false;
-      try {
-        const dueDate = l.dueDate?.toDate ? l.dueDate.toDate() : new Date(l.dueDate);
-        if (isNaN(dueDate.getTime())) return false;
-        return dueDate < new Date();
-      } catch (e) {
-        return false;
+  const handleMarkReminderSent = async (loan: Loan) => {
+    if (!loan.id) return;
+    const nowDate = new Date();
+    setLoans((prev) =>
+      prev.map((l) =>
+        l.id === loan.id
+          ? { ...l, lastReminderAt: nowDate, reminderCount: (l.reminderCount || 0) + 1 }
+          : l
+      )
+    );
+    try {
+      await libraryService.markLoanReminderSent(loan.id, loan.reminderCount || 0);
+    } catch (err) {
+      console.error('Erro ao registrar envio de lembrete:', err);
+    }
+  };
+
+  const handleChangeDueSoonDays = (days: number) => {
+    setDueSoonDays(days);
+    saveDueSoonDays(days);
+  };
+
+  const handleSaveTemplates = (templates: ReminderTemplates) => {
+    setReminderTemplates(templates);
+    saveReminderTemplates(templates);
+  };
+
+  const { overdueCount, dueSoonCount, pendingReminderCount } = useMemo(() => {
+    let overdue = 0;
+    let dueSoon = 0;
+    let pending = 0;
+
+    loans.forEach((l) => {
+      const urgency = classifyLoanUrgency(l, dueSoonDays);
+      if (urgency.category === 'overdue') overdue += 1;
+      if (urgency.category === 'due_soon') dueSoon += 1;
+
+      if (
+        (urgency.category === 'overdue' || urgency.category === 'due_soon') &&
+        normalizeWhatsAppPhone(l.borrowerPhone) !== null &&
+        !wasRemindedToday(l)
+      ) {
+        pending += 1;
       }
-    }).length;
-  }, [loans]);
+    });
+
+    return { overdueCount: overdue, dueSoonCount: dueSoon, pendingReminderCount: pending };
+  }, [loans, dueSoonDays]);
 
   if (loading && loans.length === 0) return (
     <div className="h-[60vh] flex items-center justify-center">
@@ -1226,19 +1305,49 @@ const LoansView = () => {
         </div>
       </div>
 
-      {overdueCount > 0 && (
+      {(overdueCount > 0 || dueSoonCount > 0) && (
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 p-4 rounded-xl flex items-center gap-4 text-rose-800 dark:text-rose-200 shadow-sm"
+          className={`border p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${
+            overdueCount > 0
+              ? 'bg-rose-50 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/30 text-rose-800 dark:text-rose-200'
+              : 'bg-amber-50 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900/30 text-amber-800 dark:text-amber-200'
+          }`}
         >
-          <div className="p-2 bg-rose-500 rounded-lg text-white">
-            <Clock size={20} />
+          <div className="flex items-center gap-4">
+            <div className={`p-2 rounded-lg text-white shrink-0 ${overdueCount > 0 ? 'bg-rose-500' : 'bg-amber-500'}`}>
+              <Clock size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-bold">
+                {overdueCount > 0 && (
+                  <>
+                    {overdueCount} {overdueCount === 1 ? 'empréstimo atrasado' : 'empréstimos atrasados'}
+                  </>
+                )}
+                {overdueCount > 0 && dueSoonCount > 0 && ' · '}
+                {dueSoonCount > 0 && (
+                  <>
+                    {dueSoonCount} {dueSoonCount === 1 ? 'próximo do vencimento' : 'próximos do vencimento'}
+                  </>
+                )}
+              </p>
+              <p className="text-xs font-medium opacity-80">
+                Envie lembretes personalizados pelo WhatsApp para agilizar as devoluções.
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-bold">Atenção: {overdueCount} {overdueCount === 1 ? 'empréstimo está' : 'empréstimos estão'} com a devolução atrasada!</p>
-            <p className="text-xs font-medium opacity-80">Verifique a lista abaixo para gerenciar as pendências.</p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsRemindersModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors whitespace-nowrap shrink-0"
+          >
+            <MessageCircle size={15} />
+            <span>
+              Enviar Lembretes ({pendingReminderCount > 0 ? pendingReminderCount : overdueCount + dueSoonCount})
+            </span>
+          </button>
         </motion.div>
       )}
 
@@ -1248,6 +1357,16 @@ const LoansView = () => {
           <p className="text-slate-400 dark:text-slate-500 text-sm font-medium">Veja quem está com seus livros e gerencie devoluções.</p>
         </div>
         <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => setIsRemindersModalOpen(true)}
+            className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap shrink-0 shadow-sm"
+          >
+            <MessageCircle size={18} />
+            <span>
+              Lembretes WhatsApp{overdueCount + dueSoonCount > 0 ? ` (${overdueCount + dueSoonCount})` : ''}
+            </span>
+          </button>
           <button
             type="button"
             onClick={() => exportLoansToSpreadsheet(sortedAndFilteredLoans)}
@@ -1281,20 +1400,23 @@ const LoansView = () => {
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
               {sortedAndFilteredLoans.map(loan => {
-                let isOverdue = false;
-                try {
-                  if (loan.status === 'active') {
-                    const dueDate = loan.dueDate?.toDate ? loan.dueDate.toDate() : new Date(loan.dueDate);
-                    if (!isNaN(dueDate.getTime())) {
-                      isOverdue = dueDate < new Date();
-                    }
-                  }
-                } catch (e) {
-                  isOverdue = false;
-                }
+                const urgency = classifyLoanUrgency(loan, dueSoonDays);
+                const isOverdue = urgency.category === 'overdue';
+                const isDueSoon = urgency.category === 'due_soon';
+                const phoneDigits = normalizeWhatsAppPhone(loan.borrowerPhone);
+                const canRemind = (isOverdue || isDueSoon) && phoneDigits !== null;
+                const remindedToday = wasRemindedToday(loan);
+                const lastRemindedDate = parseLoanDate(loan.lastReminderAt);
+                const scheduledReminderDate = parseLoanDate(loan.reminderScheduledFor);
+                const waUrl = canRemind
+                  ? buildWhatsAppUrl(
+                      phoneDigits!,
+                      buildReminderMessage(loan, urgency, reminderTemplates)
+                    )
+                  : '';
 
                 return (
-                  <tr key={loan.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group ${isOverdue ? 'bg-rose-50/10 dark:bg-rose-950/10' : ''}`}>
+                  <tr key={loan.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group ${isOverdue ? 'bg-rose-50/10 dark:bg-rose-950/10' : isDueSoon ? 'bg-amber-50/10 dark:bg-amber-950/10' : ''}`}>
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
                         <div className={`w-10 h-14 rounded-md flex items-center justify-center text-slate-300 dark:text-slate-700 shadow-sm overflow-hidden flex-shrink-0 border ${isOverdue ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-900/30' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800'}`}>
@@ -1333,9 +1455,9 @@ const LoansView = () => {
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <div className={`flex items-center gap-2 ${isOverdue ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                        <Clock size={14} className={isOverdue ? 'text-rose-400 animate-pulse' : 'text-slate-300 dark:text-slate-600'} />
-                        <span className="text-sm font-bold">
+                      <div className={`flex items-center gap-2 ${isOverdue ? 'text-rose-600 dark:text-rose-400' : isDueSoon ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                        <Clock size={14} className={isOverdue ? 'text-rose-400 animate-pulse' : isDueSoon ? 'text-amber-500' : 'text-slate-300 dark:text-slate-600'} />
+                        <span className="text-sm font-bold tabular-nums">
                           {(() => {
                             try {
                               if (loan.dueDate?.toDate) return format(loan.dueDate.toDate(), "dd 'de' MMM", { locale: ptBR });
@@ -1353,23 +1475,82 @@ const LoansView = () => {
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                        loan.status === 'returned' 
-                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-                          : isOverdue
-                            ? 'bg-rose-100 text-rose-700 border border-rose-200 shadow-sm animate-pulse'
-                            : 'bg-amber-50 text-amber-600 border border-amber-100'
-                      }`}>
-                        {loan.status === 'returned' ? 'Devolvido' : 
-                         isOverdue ? 'Atrasado' : 'Em curso'}
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                          loan.status === 'returned' 
+                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                            : isOverdue
+                              ? 'bg-rose-100 text-rose-700 border border-rose-200 shadow-sm'
+                              : isDueSoon
+                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                : 'bg-amber-50 text-amber-600 border border-amber-100'
+                        }`}>
+                          {loan.status === 'returned'
+                            ? 'Devolvido'
+                            : loan.status === 'lost'
+                              ? 'Extraviado'
+                              : isOverdue
+                                ? 'Atrasado'
+                                : isDueSoon
+                                  ? urgency.daysDiff <= 0
+                                    ? 'Vence hoje'
+                                    : urgency.daysDiff === 1
+                                      ? 'Vence amanhã'
+                                      : `Vence em ${urgency.daysDiff}d`
+                                  : 'Em curso'}
+                        </span>
+                        {loan.returnClaimStatus === 'pending_verification' &&
+                          loan.status !== 'returned' && (
+                            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                              Leitor informou devolução · verificar
+                            </span>
+                          )}
+                        {(loan.extensionCount || 0) > 0 && (
+                          <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 tabular-nums">
+                            {loan.extensionCount === 1
+                              ? 'Prorrogado (+15d)'
+                              : `Prorrogado (${loan.extensionCount}x)`}
+                          </span>
+                        )}
+                        {lastRemindedDate && (
+                          <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 tabular-nums">
+                            {remindedToday ? 'Lembrado hoje' : `Lembrado ${format(lastRemindedDate, 'dd/MM')}`}
+                          </span>
+                        )}
+                        {!lastRemindedDate &&
+                          loan.status !== 'returned' &&
+                          loan.status !== 'lost' &&
+                          loan.reminderStatus === 'scheduled' &&
+                          scheduledReminderDate && (
+                            <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 tabular-nums">
+                              Aviso prog. {format(scheduledReminderDate, 'dd/MM')}
+                            </span>
+                          )}
+                      </div>
                     </td>
                     <td className="px-8 py-6">
-                      <div className="flex items-center gap-4">
-                        {loan.status === 'active' && (
+                      <div className="flex items-center gap-3">
+                        {canRemind && (
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => handleMarkReminderSent(loan)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap border ${
+                              remindedToday
+                                ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-700 dark:hover:text-emerald-300'
+                                : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/50 hover:bg-emerald-600 hover:text-white'
+                            }`}
+                            title="Enviar lembrete automático via WhatsApp"
+                          >
+                            <MessageCircle size={13} />
+                            <span>{remindedToday ? 'Reenviar' : 'WhatsApp'}</span>
+                          </a>
+                        )}
+                        {(loan.status === 'active' || loan.status === 'overdue') && (
                           <button 
                             onClick={() => handleReturn(loan)}
-                            className={`font-bold text-xs hover:underline decoration-2 underline-offset-4 ${isOverdue ? 'text-rose-600 hover:text-rose-700' : 'text-indigo-600 hover:text-indigo-700'}`}
+                            className={`font-bold text-xs hover:underline decoration-2 underline-offset-4 whitespace-nowrap ${isOverdue ? 'text-rose-600 hover:text-rose-700' : 'text-indigo-600 hover:text-indigo-700'}`}
                           >
                             Devolver
                           </button>
@@ -1412,6 +1593,17 @@ const LoansView = () => {
             loan={selectedLoan}
             onClose={() => setIsEditModalOpen(false)} 
             onSave={() => { setIsEditModalOpen(false); loadLoans(); }} 
+          />
+        )}
+        {isRemindersModalOpen && (
+          <WhatsAppRemindersModal
+            loans={loans}
+            dueSoonDays={dueSoonDays}
+            onChangeDueSoonDays={handleChangeDueSoonDays}
+            templates={reminderTemplates}
+            onSaveTemplates={handleSaveTemplates}
+            onMarkSent={handleMarkReminderSent}
+            onClose={() => setIsRemindersModalOpen(false)}
           />
         )}
       </AnimatePresence>
@@ -1510,10 +1702,27 @@ const Login = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: (
 
 const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleTheme: () => void }) => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'kiosk' | 'inventory' | 'loans'>('kiosk');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'loans'>('inventory');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
-  const selectMobileTab = (tab: 'kiosk' | 'inventory' | 'loans') => {
+  const selfServiceHref = '/autoatendimento/';
+
+  const handleCopySelfServiceLink = async () => {
+    const publicOrigin = loadPublicOrigin();
+    const fullUrl = publicOrigin
+      ? `${publicOrigin}/autoatendimento/`
+      : '/autoatendimento/';
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2200);
+    } catch (err) {
+      console.error('Erro ao copiar link do autoatendimento:', err);
+    }
+  };
+
+  const selectMobileTab = (tab: 'inventory' | 'loans') => {
     setActiveTab(tab);
     setMobileMenuOpen(false);
   };
@@ -1522,7 +1731,7 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-72 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 justify-between shrink-0 transition-colors duration-300">
-        <div className="space-y-12">
+        <div className="space-y-10">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/20">
@@ -1541,12 +1750,6 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
               <h3 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Principal</h3>
             </div>
             <SidebarItem 
-              icon={Tablet} 
-              label="Autoatendimento" 
-              active={activeTab === 'kiosk'} 
-              onClick={() => setActiveTab('kiosk')} 
-            />
-            <SidebarItem 
               icon={Library} 
               label="Gestão de Acervo" 
               active={activeTab === 'inventory'} 
@@ -1559,6 +1762,41 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
               onClick={() => setActiveTab('loans')} 
             />
           </nav>
+
+          <div className="pt-6 border-t border-slate-100 dark:border-slate-800 space-y-2">
+            <div className="px-3 mb-2">
+              <h3 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Aplicação Externa</h3>
+            </div>
+            <a
+              href={selfServiceHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-400 transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <Tablet size={18} />
+                <span>Autoatendimento</span>
+              </div>
+              <ExternalLink size={14} className="opacity-60" />
+            </a>
+            <button
+              type="button"
+              onClick={handleCopySelfServiceLink}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+            >
+              {linkCopied ? (
+                <>
+                  <Check size={14} className="text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-emerald-600 dark:text-emerald-400">Link individual copiado</span>
+                </>
+              ) : (
+                <>
+                  <Link2 size={14} />
+                  <span>Copiar link individual</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="pt-8 border-t border-slate-100 dark:border-slate-800">
@@ -1609,22 +1847,7 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
             </button>
 
             {mobileMenuOpen && (
-              <div className="absolute right-0 mt-2 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-2 z-50">
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    selectMobileTab('kiosk');
-                  }}
-                  className={`w-full px-4 py-3 text-left text-sm font-medium flex items-center gap-3 transition-colors ${
-                    activeTab === 'kiosk'
-                      ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 font-bold'
-                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Tablet size={17} />
-                  <span>Autoatendimento</span>
-                </button>
+              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-2 z-50">
                 <button
                   type="button"
                   onMouseDown={(e) => {
@@ -1654,6 +1877,42 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
                 >
                   <HandHeart size={17} />
                   <span>Empréstimos</span>
+                </button>
+
+                <div className="my-1.5 border-t border-slate-100 dark:border-slate-800" />
+
+                <a
+                  href={selfServiceHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onMouseDown={() => setTimeout(() => setMobileMenuOpen(false), 100)}
+                  className="w-full px-4 py-3 text-left text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between transition-colors"
+                >
+                  <span className="flex items-center gap-3">
+                    <Tablet size={17} />
+                    <span>Abrir Autoatendimento</span>
+                  </span>
+                  <ExternalLink size={14} className="text-slate-400" />
+                </a>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleCopySelfServiceLink();
+                  }}
+                  className="w-full px-4 py-3 text-left text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
+                >
+                  {linkCopied ? (
+                    <>
+                      <Check size={17} className="text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-emerald-600 dark:text-emerald-400">Link individual copiado</span>
+                    </>
+                  ) : (
+                    <>
+                      <Link2 size={17} />
+                      <span>Copiar link Autoatendimento</span>
+                    </>
+                  )}
                 </button>
 
                 <div className="my-1.5 border-t border-slate-100 dark:border-slate-800" />
@@ -1696,9 +1955,7 @@ const Dashboard = ({ theme, toggleTheme }: { theme: 'light' | 'dark', toggleThem
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3 }}
             >
-              {activeTab === 'kiosk' ? (
-                <SelfServiceView />
-              ) : activeTab === 'inventory' ? (
+              {activeTab === 'inventory' ? (
                 <LibraryView />
               ) : (
                 <LoansView />
